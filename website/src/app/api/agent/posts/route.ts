@@ -97,6 +97,12 @@ export async function POST(req: Request) {
       { error: "Missing required fields: title, excerpt, content" },
       { status: 400 },
     );
+  // Strict: agent articles must always include a photo.
+  if (!imageUrl || typeof imageUrl !== "string" || !imageUrl.trim())
+    return NextResponse.json(
+      { error: "Missing required field: imageUrl (every post must have a photo)" },
+      { status: 400 },
+    );
   if (!isCategory(category))
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
   if (!locales.includes(language))
