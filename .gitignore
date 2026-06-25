@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+
+# Generated media (stored in object storage in prod)
+media/
+storage/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Coverage / test output
+coverage/
+
+# OAuth tokens / secrets
+.secrets/
+
+# Claude Code local settings (may contain tokens / machine-specific config)
+.claude/
