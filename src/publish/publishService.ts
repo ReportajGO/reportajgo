@@ -13,7 +13,7 @@ const log = logger.child({ module: "publish" });
 export async function publishScheduledPost(scheduledPostId: string): Promise<void> {
   const sp = await prisma.scheduledPost.findUnique({
     where: { id: scheduledPostId },
-    include: { draft: { include: { media: true } } },
+    include: { draft: { include: { media: true, newsItem: true } } },
   });
 
   if (!sp) {
@@ -35,12 +35,24 @@ export async function publishScheduledPost(scheduledPostId: string): Promise<voi
       .filter((m) => m.status === "READY" && m.url)
       .map((m) => ({ type: m.type as MediaType, url: m.url! }));
 
+    const news = sp.draft.newsItem;
     const publisher = getPublisher(sp.platform as Platform);
     const result = await publisher.publish({
       platform: sp.platform as Platform,
       body: sp.draft.body,
       hashtags: sp.draft.hashtags,
       media,
+      article: news
+        ? {
+            title: sp.draft.headline?.trim() || news.title,
+            excerpt: news.summary,
+            language: sp.draft.language,
+            topic: news.topic ?? undefined,
+            source: news.sourceName ?? undefined,
+            sourceUrl: news.sourceUrl,
+            dedupeKey: news.contentHash,
+          }
+        : undefined,
     });
 
     await prisma.$transaction([

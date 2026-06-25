@@ -5,11 +5,35 @@ export interface PublishMedia {
   url: string;
 }
 
+/**
+ * Article metadata used by publishers that need more than a caption (the
+ * WEBSITE publisher builds a full article from this). Social publishers
+ * (Telegram/Meta) ignore it and just use body + media.
+ */
+export interface PublishArticle {
+  /** Themed headline / article title. */
+  title: string;
+  /** Short summary / standfirst. */
+  excerpt: string;
+  /** Post language code ("uz" | "ru" | "en"). */
+  language: string;
+  /** Originating news topic (used to map a site category). */
+  topic?: string;
+  /** Publisher name of the original story. */
+  source?: string;
+  /** Original article URL. */
+  sourceUrl?: string;
+  /** Stable idempotency key (the news item's content hash). */
+  dedupeKey?: string;
+}
+
 export interface PublishInput {
   platform: Platform;
   body: string;
   hashtags: string[];
   media: PublishMedia[];
+  /** Present when the draft carries article metadata (WEBSITE, etc.). */
+  article?: PublishArticle;
 }
 
 export interface PublishResult {

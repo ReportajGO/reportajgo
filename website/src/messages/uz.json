@@ -1,0 +1,130 @@
+{
+  "brand": {
+    "slogan": "Yangilik shu yerda"
+  },
+  "ads": {
+    "label": "Reklama"
+  },
+  "cookies": {
+    "message": "Saytni yaxshilash va mos kontentni ko‘rsatish uchun cookie-fayllardan foydalanamiz.",
+    "accept": "Hammasini qabul qilish",
+    "reject": "Faqat zarurlari"
+  },
+  "nav": {
+    "home": "Bosh sahifa",
+    "world": "Dunyo",
+    "economics": "Iqtisod",
+    "sport": "Sport",
+    "culture": "Madaniyat",
+    "tech": "Texnologiya"
+  },
+  "ticker": {
+    "label": "VALYUTA KURSI",
+    "unit": "so‘m"
+  },
+  "header": {
+    "searchPlaceholder": "Qidirish",
+    "theme": "Mavzu",
+    "openMenu": "Menyu"
+  },
+  "home": {
+    "trending": "Ko‘p o‘qilgan",
+    "latest": "Eng so‘nggi yangiliklar",
+    "seeAll": "Hammasi",
+    "breaking": "SHOSHILINCH"
+  },
+  "category": {
+    "in": "bo‘limida"
+  },
+  "article": {
+    "by": "Muallif",
+    "readMin": "daqiqa o‘qish",
+    "views": "ko‘rishlar",
+    "share": "Ulashish",
+    "copy": "Havoladan nusxa olish",
+    "copied": "Nusxalandi",
+    "back": "Bosh sahifaga",
+    "related": "O‘xshash materiallar",
+    "notFound": "Material topilmadi"
+  },
+  "time": {
+    "just": "hozirgina",
+    "m": "daqiqa oldin",
+    "h": "soat oldin",
+    "d": "kun oldin"
+  },
+  "search": {
+    "results": "So‘rov bo‘yicha natijalar",
+    "empty": "Hech narsa topilmadi",
+    "emptySub": "Boshqa so‘rov bilan urinib ko‘ring."
+  },
+  "footer": {
+    "tagline": "Dunyo yangiliklari — shovqinsiz. Tez, aniq, uch tilda.",
+    "sections": "Bo‘limlar",
+    "company": "Kompaniya",
+    "languages": "Tillar",
+    "about": "Biz haqimizda",
+    "editorial": "Tahririyat kodeksi",
+    "contact": "Aloqa",
+    "advertise": "Reklama",
+    "rights": "Barcha huquqlar himoyalangan"
+  },
+  "admin": {
+    "title": "Boshqaruv paneli",
+    "dashboard": "Dashboard",
+    "newPost": "Publikatsiya qo‘shish",
+    "editPost": "Publikatsiyani tahrirlash",
+    "posts": "Publikatsiyalar",
+    "noPosts": "Hozircha publikatsiyalar yo‘q",
+    "signIn": "Kirish",
+    "signOut": "Chiqish",
+    "email": "Elektron pochta",
+    "password": "Parol",
+    "loginTitle": "Tahririyat uchun kirish",
+    "loginError": "Pochta yoki parol noto‘g‘ri",
+    "backToSite": "Saytga",
+    "upload": {
+      "hint": "Rasmni shu yerga tashlang yoki tanlash uchun bosing",
+      "hintSub": "PNG, JPG, WEBP, GIF — 5 MB gacha",
+      "change": "Almashtirish",
+      "remove": "O‘chirish",
+      "errType": "Faqat rasm yuklash mumkin",
+      "errSize": "Fayl juda katta (maks. 5 MB)"
+    },
+    "status": {
+      "pending": "Moderatsiyada",
+      "published": "Chop etilgan",
+      "rejected": "Rad etilgan"
+    },
+    "fields": {
+      "headline": "Sarlavha",
+      "excerpt": "Qisqacha tavsif",
+      "body": "Maqola matni",
+      "category": "Kategoriya",
+      "image": "Rasm havolasi",
+      "language": "Publikatsiya tili",
+      "breaking": "Shoshilinch yangilik (BREAKING)",
+      "published": "Darhol chop etish (moderatsiyasiz)"
+    },
+    "actions": {
+      "save": "Saqlash",
+      "saving": "Saqlanmoqda…",
+      "create": "Yaratish",
+      "update": "Yangilash",
+      "delete": "O‘chirish",
+      "edit": "Tahrirlash",
+      "cancel": "Bekor qilish",
+      "confirmDelete": "Bu publikatsiya o‘chirilsinmi?",
+      "approve": "Tasdiqlash",
+      "reject": "Rad etish",
+      "unpublish": "Olib qo‘yish"
+    },
+    "table": {
+      "title": "Sarlavha",
+      "category": "Kategoriya",
+      "lang": "Til",
+      "date": "Sana",
+      "status": "Holat"
+    }
+  }
+}

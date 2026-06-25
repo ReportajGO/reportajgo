@@ -21,3 +21,9 @@ coverage/
 
 # Claude Code local settings (may contain tokens / machine-specific config)
 .claude/
+
+# Build caches / Next.js (the bundled website)
+*.tsbuildinfo
+.next/
+website/public/uploads/*
+!website/public/uploads/.gitkeep

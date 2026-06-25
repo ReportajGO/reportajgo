@@ -1,0 +1,64 @@
+// ReportajGO — Prisma schema
+// SQLite for local dev; switch provider to "postgresql" for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Editorial users (admin panel access).
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String // bcrypt hash
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  posts     Post[]
+}
+
+// News sections: world, economics, sport, culture, tech.
+model Category {
+  id    String @id @default(cuid())
+  slug  String @unique
+  posts Post[]
+}
+
+// A single-language news article.
+model Post {
+  id        String  @id @default(cuid())
+  title     String
+  excerpt   String
+  body      String
+  imageUrl  String?
+  language  String // original/source language: "uz" | "ru" | "en"
+  // Per-language translations as JSON: { "uz": {title,excerpt,body}, "ru":{…}, "en":{…} }.
+  // Lets ONE post show on every locale, rendered in the reader's language.
+  // Falls back to the base title/excerpt/body when a translation is missing.
+  translations String?
+  breaking  Boolean @default(false)
+  published Boolean @default(true)
+  views     Int     @default(0)
+
+  // Provenance for agent-ingested posts (the ReportajGO AI agent cross-posts
+  // here after a human approves the item in its Telegram bot).
+  origin    String  @default("manual") // "manual" | "agent"
+  source    String? // publisher name, e.g. "Reuters"
+  sourceUrl String? // original article URL
+  // Idempotency key (the agent's content hash) so retries don't double-post.
+  dedupeKey String? @unique
+
+  category   Category @relation(fields: [categoryId], references: [id])
+  categoryId String
+  author     User?    @relation(fields: [authorId], references: [id])
+  authorId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([language, categoryId])
+  @@index([createdAt])
+}

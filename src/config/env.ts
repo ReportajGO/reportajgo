@@ -71,6 +71,11 @@ const schema = z.object({
   DASHBOARD_USERNAME: z.string().default("admin"),
   DASHBOARD_PASSWORD: z.string().optional(),
 
+  // ReportajGO website (cross-post target). The agent POSTs approved articles
+  // to WEBSITE_API_URL/api/agent/posts with WEBSITE_API_KEY as a bearer token.
+  WEBSITE_API_URL: z.string().default("http://localhost:3000"),
+  WEBSITE_API_KEY: z.string().optional(),
+
   META_ACCESS_TOKEN: z.string().optional(),
   META_IG_BUSINESS_ID: z.string().optional(),
   META_FB_PAGE_ID: z.string().optional(),

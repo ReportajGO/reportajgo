@@ -15,11 +15,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export function startDashboard(): Server {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
-  // Strict login gate for every surface (UI, API, media). No-op if unconfigured.
+  // Generated media is public (it's published on the website and to social
+  // platforms anyway) so the site can load image URLs without credentials.
+  app.use("/media", express.static(MEDIA_ROOT));
+  // Strict login gate for the UI + API. No-op if DASHBOARD_PASSWORD is unset.
   app.use(dashboardAuth());
   app.use("/api", api);
-  // Generated media (Gemini images) served from the media directory.
-  app.use("/media", express.static(MEDIA_ROOT));
   // Static UI lives alongside this module (copied to dist on build).
   app.use(express.static(join(__dirname, "public")));
 

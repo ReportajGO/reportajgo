@@ -1,0 +1,130 @@
+{
+  "brand": {
+    "slogan": "News is here"
+  },
+  "ads": {
+    "label": "Advertisement"
+  },
+  "cookies": {
+    "message": "We use cookies to improve your experience and show relevant content.",
+    "accept": "Accept all",
+    "reject": "Necessary only"
+  },
+  "nav": {
+    "home": "Home",
+    "world": "World",
+    "economics": "Economics",
+    "sport": "Sport",
+    "culture": "Culture",
+    "tech": "Technology"
+  },
+  "ticker": {
+    "label": "EXCHANGE RATES",
+    "unit": "UZS"
+  },
+  "header": {
+    "searchPlaceholder": "Search",
+    "theme": "Theme",
+    "openMenu": "Menu"
+  },
+  "home": {
+    "trending": "Trending now",
+    "latest": "Latest news",
+    "seeAll": "See all",
+    "breaking": "BREAKING"
+  },
+  "category": {
+    "in": "in"
+  },
+  "article": {
+    "by": "By",
+    "readMin": "min read",
+    "views": "views",
+    "share": "Share",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "back": "Back to home",
+    "related": "Related stories",
+    "notFound": "Article not found"
+  },
+  "time": {
+    "just": "just now",
+    "m": "m ago",
+    "h": "h ago",
+    "d": "d ago"
+  },
+  "search": {
+    "results": "Results for",
+    "empty": "Nothing found",
+    "emptySub": "Try a different search."
+  },
+  "footer": {
+    "tagline": "World news without the noise. Fast, clear, in three languages.",
+    "sections": "Sections",
+    "company": "Company",
+    "languages": "Languages",
+    "about": "About",
+    "editorial": "Editorial code",
+    "contact": "Contact",
+    "advertise": "Advertise",
+    "rights": "All rights reserved"
+  },
+  "admin": {
+    "title": "Control panel",
+    "dashboard": "Dashboard",
+    "newPost": "Add post",
+    "editPost": "Edit post",
+    "posts": "Posts",
+    "noPosts": "No posts yet",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "email": "Email",
+    "password": "Password",
+    "loginTitle": "Editorial sign in",
+    "loginError": "Invalid email or password",
+    "backToSite": "Back to site",
+    "upload": {
+      "hint": "Drag & drop a photo here, or click to choose",
+      "hintSub": "PNG, JPG, WEBP, GIF — up to 5 MB",
+      "change": "Replace",
+      "remove": "Remove",
+      "errType": "Only image files are allowed",
+      "errSize": "File too large (max 5 MB)"
+    },
+    "status": {
+      "pending": "Pending",
+      "published": "Published",
+      "rejected": "Rejected"
+    },
+    "fields": {
+      "headline": "Headline",
+      "excerpt": "Excerpt",
+      "body": "Article body",
+      "category": "Category",
+      "image": "Image URL",
+      "language": "Post language",
+      "breaking": "Breaking news",
+      "published": "Publish immediately (skip moderation)"
+    },
+    "actions": {
+      "save": "Save",
+      "saving": "Saving…",
+      "create": "Create",
+      "update": "Update",
+      "delete": "Delete",
+      "edit": "Edit",
+      "cancel": "Cancel",
+      "confirmDelete": "Delete this post?",
+      "approve": "Approve",
+      "reject": "Reject",
+      "unpublish": "Unpublish"
+    },
+    "table": {
+      "title": "Title",
+      "category": "Category",
+      "lang": "Lang",
+      "date": "Date",
+      "status": "Status"
+    }
+  }
+}

@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================
+   ReportajGO — theme tokens
+   Light = brand-white bg / brand-black text
+   Dark  = deep matte brand-black bg / brand-white text
+   Values are "R G B" triplets so Tailwind's <alpha-value> works.
+=========================================================== */
+:root {
+  --bg: 255 255 255;
+  --bg-sub: 243 244 247;
+  --surface: 255 255 255;
+  --border: 228 230 236;
+  --text: 10 13 21;
+  --text-soft: 91 97 114;
+  --brand: 229 26 36; /* brand-red */
+}
+
+.dark {
+  --bg: 10 13 21;
+  --bg-sub: 16 20 30;
+  --surface: 20 25 37;
+  --border: 36 44 60;
+  --text: 233 236 243;
+  --text-soft: 154 162 181;
+  --brand: 255 30 39; /* brand-red-hot pops harder on black */
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-bg text-ink font-serif antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+}
+
+@layer components {
+  /* Fade the ticker edges so the marquee slides in/out smoothly. */
+  .ticker-mask {
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 4%,
+      #000 96%,
+      transparent
+    );
+    mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 4%,
+      #000 96%,
+      transparent
+    );
+  }
+  .ticker-mask:hover .animate-ticker {
+    animation-play-state: paused;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ticker,
+  .animate-pulse {
+    animation: none !important;
+  }
+}
