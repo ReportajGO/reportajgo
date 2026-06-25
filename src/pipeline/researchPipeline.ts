@@ -1,4 +1,5 @@
 import { logger } from "../config/logger.js";
+import { dedupeSelectedItems } from "../filter/dedupe.js";
 import { persistNewItems, rankPendingItems } from "../filter/filterService.js";
 import { draftSelectedItems } from "../generate/copy/copyService.js";
 import { researchAllTopics } from "../research/researchService.js";
@@ -16,6 +17,7 @@ export async function runResearchPipeline(): Promise<{
   inserted: number;
   selected: number;
   dropped: number;
+  deduped: number;
   drafts: number;
 }> {
   log.info("research pipeline start");
@@ -23,6 +25,8 @@ export async function runResearchPipeline(): Promise<{
   const researched = await researchAllTopics();
   const insertedIds = await persistNewItems(researched);
   const { selected, dropped } = await rankPendingItems();
+  // Collapse the same story reported by multiple outlets into one before drafting.
+  const { merged: deduped } = await dedupeSelectedItems();
   const { drafts } = await draftSelectedItems();
 
   const summary = {
@@ -30,6 +34,7 @@ export async function runResearchPipeline(): Promise<{
     inserted: insertedIds.length,
     selected,
     dropped,
+    deduped,
     drafts,
   };
   log.info(summary, "research pipeline complete");
