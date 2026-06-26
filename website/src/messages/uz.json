@@ -45,6 +45,7 @@
     "copied": "Nusxalandi",
     "back": "Bosh sahifaga",
     "related": "O‘xshash materiallar",
+    "gallery": "Foto galereya",
     "notFound": "Material topilmadi"
   },
   "time": {
@@ -104,7 +105,15 @@
       "image": "Rasm havolasi",
       "language": "Publikatsiya tili",
       "breaking": "Shoshilinch yangilik (BREAKING)",
-      "published": "Darhol chop etish (moderatsiyasiz)"
+      "published": "Darhol chop etish (moderatsiyasiz)",
+      "aspect": "Muqova nisbati",
+      "gallery": "Qo‘shimcha rasmlar (galereya)",
+      "galleryHint": "Bir nechta rasm qo‘shing — maqolada galereya bo‘lib ko‘rinadi"
+    },
+    "aspect": {
+      "wide": "Keng",
+      "square": "Kvadrat",
+      "portrait": "Portret"
     },
     "actions": {
       "save": "Saqlash",

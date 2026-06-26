@@ -8,9 +8,13 @@ import { Link } from "@/i18n/navigation";
  * - /logo.png       → black "RΞPORTAJ" (for light surfaces)
  * - /logo-dark.png  → white "RΞPORTAJ" (for dark surfaces)
  *
- * `onDark` forces the white version (e.g. the always-dark footer). Otherwise
- * the version follows the site theme via Tailwind's class-based `dark:`
- * variant, so the header logo flips with the light/dark toggle.
+ * Color selection:
+ * - default → follows the page theme (black in light, white in dark), for
+ *   surfaces whose background matches the theme (e.g. the header).
+ * - `onDark` → always the white version, for constant-dark surfaces.
+ * - `invert` → the OPPOSITE of the theme (white in light, black in dark), for
+ *   surfaces whose background is inverted vs the theme — e.g. the footer
+ *   (`bg-ink`), which is dark in light mode and light in dark mode.
  *
  * Height is responsive: smaller on phones, full size from the `sm` breakpoint
  * up. Width tracks the artwork aspect ratio (1304×394 ≈ 3.31:1).
@@ -18,9 +22,11 @@ import { Link } from "@/i18n/navigation";
 export default function Logo({
   size = "md",
   onDark = false,
+  invert = false,
 }: {
   size?: "sm" | "md" | "lg";
   onDark?: boolean;
+  invert?: boolean;
 }) {
   // mobile height → desktop height (px), and the desktop width used as the
   // intrinsic dimension for next/image.
@@ -51,15 +57,15 @@ export default function Logo({
         <Image src="/logo-dark.png" className={imgClass} {...common} />
       ) : (
         <>
-          {/* light theme → black wordmark */}
+          {/* light-theme view: black normally, white when inverted */}
           <Image
-            src="/logo.png"
+            src={invert ? "/logo-dark.png" : "/logo.png"}
             className={`${imgClass} dark:hidden`}
             {...common}
           />
-          {/* dark theme → white wordmark */}
+          {/* dark-theme view: white normally, black when inverted */}
           <Image
-            src="/logo-dark.png"
+            src={invert ? "/logo.png" : "/logo-dark.png"}
             className={`${imgClass} hidden dark:block`}
             {...common}
           />

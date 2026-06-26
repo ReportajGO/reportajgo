@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { CATEGORIES } from "@/lib/constants";
+import { CATEGORIES, ASPECTS, ASPECT_CSS, type AspectRatio } from "@/lib/constants";
 import { locales } from "@/i18n/routing";
 
 export type PostFormData = {
@@ -16,6 +16,8 @@ export type PostFormData = {
   imageUrl: string; // existing image URL (edit mode)
   breaking: boolean;
   published: boolean;
+  aspect: string; // cover proportion: "16:9" | "1:1" | "4:5"
+  gallery: string[]; // existing extra photo URLs (edit mode)
 };
 
 const empty: PostFormData = {
@@ -27,7 +29,12 @@ const empty: PostFormData = {
   imageUrl: "",
   breaking: false,
   published: true,
+  aspect: "16:9",
+  gallery: [],
 };
+
+// A gallery slot: either an existing saved URL or a freshly chosen File.
+type GalleryItem = { key: string; url?: string; file?: File; preview: string };
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/avif";
@@ -53,6 +60,18 @@ export default function PostForm({ initial }: { initial?: PostFormData }) {
   const [removeImage, setRemoveImage] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Gallery (extra photos): existing URLs become items up front.
+  const [gallery, setGallery] = useState<GalleryItem[]>(
+    () =>
+      (initial?.gallery ?? []).map((url, i) => ({
+        key: `init-${i}`,
+        url,
+        preview: url,
+      })),
+  );
+  const galleryInput = useRef<HTMLInputElement>(null);
+  const gallerySeq = useRef(0);
 
   const isEdit = Boolean(form.id);
 
@@ -92,6 +111,41 @@ export default function PostForm({ initial }: { initial?: PostFormData }) {
     if (fileInput.current) fileInput.current.value = "";
   }
 
+  function addGalleryFiles(files: FileList | null) {
+    if (!files) return;
+    const valid = Array.from(files).filter(
+      (f) => f.type.startsWith("image/") && f.size <= MAX_BYTES,
+    );
+    if (valid.length !== (files?.length ?? 0)) setError(t("upload.errSize"));
+    setGallery((g) => [
+      ...g,
+      ...valid.map((file) => ({
+        key: `new-${gallerySeq.current++}`,
+        file,
+        preview: URL.createObjectURL(file),
+      })),
+    ]);
+    if (galleryInput.current) galleryInput.current.value = "";
+  }
+
+  function removeGalleryItem(key: string) {
+    setGallery((g) => {
+      const item = g.find((x) => x.key === key);
+      if (item?.preview.startsWith("blob:")) URL.revokeObjectURL(item.preview);
+      return g.filter((x) => x.key !== key);
+    });
+  }
+
+  // Clean up gallery object URLs on unmount.
+  useEffect(() => {
+    return () => {
+      gallery.forEach((it) => {
+        if (it.preview.startsWith("blob:")) URL.revokeObjectURL(it.preview);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -105,8 +159,18 @@ export default function PostForm({ initial }: { initial?: PostFormData }) {
     fd.append("language", form.language);
     fd.append("breaking", String(form.breaking));
     fd.append("published", String(form.published));
+    fd.append("aspect", form.aspect);
     if (file) fd.append("image", file);
     else if (removeImage) fd.append("removeImage", "true");
+
+    // Gallery: keep existing URLs, upload newly added files.
+    fd.append(
+      "galleryUrls",
+      JSON.stringify(gallery.filter((g) => g.url).map((g) => g.url)),
+    );
+    gallery.forEach((g) => {
+      if (g.file) fd.append("gallery", g.file);
+    });
 
     // No explicit Content-Type — the browser sets the multipart boundary.
     const res = await fetch(isEdit ? `/api/posts/${form.id}` : "/api/posts", {
@@ -198,7 +262,8 @@ export default function PostForm({ initial }: { initial?: PostFormData }) {
             <img
               src={preview}
               alt="preview"
-              className="h-56 w-full object-cover"
+              className="w-full object-cover"
+              style={{ aspectRatio: ASPECT_CSS[form.aspect as AspectRatio] ?? "16 / 9" }}
             />
             <div className="absolute right-2 top-2 flex gap-2">
               <button
@@ -270,6 +335,78 @@ export default function PostForm({ initial }: { initial?: PostFormData }) {
           className="hidden"
           onChange={(e) => acceptFile(e.target.files?.[0])}
         />
+      </div>
+
+      {/* Cover aspect ratio */}
+      <div>
+        <label className={labelCls}>{t("fields.aspect")}</label>
+        <div className="flex gap-2">
+          {ASPECTS.map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => set("aspect", a)}
+              className={`flex-1 rounded-lg border px-3 py-2.5 font-display text-sm font-bold transition-colors ${
+                form.aspect === a
+                  ? "border-brand-red bg-brand-red/10 text-brand-red"
+                  : "border-line text-ink-soft hover:border-brand-red"
+              }`}
+            >
+              {a === "16:9"
+                ? t("aspect.wide")
+                : a === "1:1"
+                  ? t("aspect.square")
+                  : t("aspect.portrait")}
+              <span className="ml-1.5 opacity-60">{a}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Extra photos (gallery) */}
+      <div>
+        <label className={labelCls}>{t("fields.gallery")}</label>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {gallery.map((g) => (
+            <div
+              key={g.key}
+              className="relative overflow-hidden rounded-lg border border-line"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={g.preview}
+                alt="gallery item"
+                className="aspect-square w-full object-cover"
+              />
+              <button
+                type="button"
+                aria-label={t("upload.remove")}
+                onClick={() => removeGalleryItem(g.key)}
+                className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-sm font-bold text-white hover:bg-brand-red"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => galleryInput.current?.click()}
+            className="flex aspect-square items-center justify-center rounded-lg border-2 border-dashed border-line text-3xl font-light text-ink-soft transition-colors hover:border-brand-red hover:text-brand-red"
+          >
+            +
+          </button>
+        </div>
+        <input
+          ref={galleryInput}
+          type="file"
+          accept={ACCEPT}
+          multiple
+          className="hidden"
+          onChange={(e) => addGalleryFiles(e.target.files)}
+        />
+        <p className="mt-1.5 font-display text-xs text-ink-soft">
+          {t("fields.galleryHint")}
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-6">

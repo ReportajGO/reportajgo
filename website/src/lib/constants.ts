@@ -34,3 +34,15 @@ export const CAT_WORD: Record<CategorySlug, string> = {
 export function isCategory(value: string): value is CategorySlug {
   return (CATEGORIES as readonly string[]).includes(value);
 }
+
+// Cover aspect ratios the admin can choose, with their CSS aspect-ratio value.
+export const ASPECTS = ["16:9", "1:1", "4:5"] as const;
+export type AspectRatio = (typeof ASPECTS)[number];
+export const ASPECT_CSS: Record<AspectRatio, string> = {
+  "16:9": "16 / 9",
+  "1:1": "1 / 1",
+  "4:5": "4 / 5",
+};
+export function isAspect(value: string): value is AspectRatio {
+  return (ASPECTS as readonly string[]).includes(value);
+}

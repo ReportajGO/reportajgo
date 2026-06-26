@@ -45,6 +45,7 @@
     "copied": "Copied",
     "back": "Back to home",
     "related": "Related stories",
+    "gallery": "Photo gallery",
     "notFound": "Article not found"
   },
   "time": {
@@ -104,7 +105,15 @@
       "image": "Image URL",
       "language": "Post language",
       "breaking": "Breaking news",
-      "published": "Publish immediately (skip moderation)"
+      "published": "Publish immediately (skip moderation)",
+      "aspect": "Cover proportion",
+      "gallery": "Extra photos (gallery)",
+      "galleryHint": "Add several photos — shown as a gallery in the article"
+    },
+    "aspect": {
+      "wide": "Wide",
+      "square": "Square",
+      "portrait": "Portrait"
     },
     "actions": {
       "save": "Save",

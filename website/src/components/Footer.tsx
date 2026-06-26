@@ -13,7 +13,7 @@ export default function Footer() {
       <div className="mx-auto max-w-page px-[22px]">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <Logo size="md" onDark />
+            <Logo size="md" invert />
             <p className="mt-2 font-display text-[11px] font-semibold uppercase tracking-[.12em] text-brand-red">
               {t("brand.slogan")}
             </p>

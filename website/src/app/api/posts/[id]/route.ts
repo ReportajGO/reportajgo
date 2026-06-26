@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isCategory } from "@/lib/constants";
+import { isCategory, isAspect } from "@/lib/constants";
 import { locales } from "@/i18n/routing";
 import { UploadError, deleteImage } from "@/lib/upload";
 import { parsePostInput } from "@/lib/postPayload";
@@ -40,7 +40,7 @@ export async function PUT(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const { title, excerpt, content, category, language, imageUrl, breaking, published } =
+  const { title, excerpt, content, category, language, imageUrl, breaking, published, aspect, gallery } =
     input;
 
   if (category && !isCategory(category))
@@ -51,6 +51,18 @@ export async function PUT(req: Request, { params }: Ctx) {
   // imageUrl === undefined → keep existing; otherwise it's a new upload URL or
   // an explicit null (clear). When the image changes, remove the old file.
   const imageChanges = imageUrl !== undefined && imageUrl !== existing.imageUrl;
+
+  // Gallery: when provided, delete any previously-stored files no longer kept.
+  let removedGallery: string[] = [];
+  if (gallery !== undefined) {
+    let prev: string[] = [];
+    try {
+      prev = existing.gallery ? JSON.parse(existing.gallery) : [];
+    } catch {
+      prev = [];
+    }
+    removedGallery = prev.filter((u) => !gallery.includes(u));
+  }
 
   // Re-translate when any text or the source language changed, so every locale
   // stays in sync with the edit.
@@ -80,6 +92,10 @@ export async function PUT(req: Request, { params }: Ctx) {
       ...(content !== undefined ? { body: content } : {}),
       ...(translations !== undefined ? { translations } : {}),
       ...(imageUrl !== undefined ? { imageUrl: imageUrl || null } : {}),
+      ...(aspect && isAspect(aspect) ? { aspect } : {}),
+      ...(gallery !== undefined
+        ? { gallery: gallery.length ? JSON.stringify(gallery) : null }
+        : {}),
       ...(language !== undefined ? { language } : {}),
       ...(breaking !== undefined ? { breaking: Boolean(breaking) } : {}),
       ...(published !== undefined
@@ -99,6 +115,7 @@ export async function PUT(req: Request, { params }: Ctx) {
   });
 
   if (imageChanges) await deleteImage(existing.imageUrl);
+  for (const url of removedGallery) await deleteImage(url);
 
   return NextResponse.json(post);
 }
@@ -111,6 +128,14 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const { id } = await params;
   const existing = await prisma.post.findUnique({ where: { id } });
   await prisma.post.delete({ where: { id } });
-  if (existing) await deleteImage(existing.imageUrl);
+  if (existing) {
+    await deleteImage(existing.imageUrl);
+    try {
+      const urls: string[] = existing.gallery ? JSON.parse(existing.gallery) : [];
+      for (const url of urls) await deleteImage(url);
+    } catch {
+      /* malformed gallery JSON — nothing to clean */
+    }
+  }
   return NextResponse.json({ ok: true });
 }

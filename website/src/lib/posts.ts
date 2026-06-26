@@ -14,6 +14,8 @@ export type PostDTO = {
   breaking: boolean;
   published: boolean;
   views: number;
+  aspect: string;
+  gallery: string[];
   author: string | null;
   createdAt: string;
 };
@@ -29,6 +31,8 @@ type WithCategoryAuthor = {
   breaking: boolean;
   published: boolean;
   views: number;
+  aspect: string;
+  gallery: string | null;
   createdAt: Date;
   category: { slug: string };
   author: { name: string | null } | null;
@@ -61,9 +65,21 @@ function toDTO(p: WithCategoryAuthor, locale?: string): PostDTO {
     breaking: p.breaking,
     published: p.published,
     views: p.views,
+    aspect: p.aspect,
+    gallery: parseGallery(p.gallery),
     author: p.author?.name ?? null,
     createdAt: p.createdAt.toISOString(),
   };
+}
+
+function parseGallery(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((u) => typeof u === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 const include = { category: true, author: true } as const;

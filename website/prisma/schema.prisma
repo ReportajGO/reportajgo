@@ -43,6 +43,10 @@ model Post {
   breaking  Boolean @default(false)
   published Boolean @default(true)
   views     Int     @default(0)
+  // Cover aspect ratio chosen in admin: "16:9" | "1:1" | "4:5".
+  aspect    String  @default("16:9")
+  // Extra photos as a JSON array of URLs (gallery shown on the article page).
+  gallery   String?
 
   // Provenance for agent-ingested posts (the ReportajGO AI agent cross-posts
   // here after a human approves the item in its Telegram bot).

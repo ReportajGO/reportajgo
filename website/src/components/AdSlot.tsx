@@ -1,4 +1,14 @@
+import { getServerSession } from "next-auth";
 import { getTranslations } from "next-intl/server";
+import { authOptions } from "@/lib/auth";
+
+/**
+ * Master switch for live ad slots. While `false`, regular visitors see nothing
+ * (placements stay in the page), but a logged-in admin still sees the labelled
+ * placeholders to preview where ads will appear. Flip to `true` (or drop in a
+ * real ad tag) when ads go live for everyone.
+ */
+const ADS_ENABLED = false;
 
 /**
  * Reusable advertising placeholder. Drop it anywhere a banner/box should go;
@@ -17,6 +27,12 @@ export default async function AdSlot({
   variant?: "leaderboard" | "banner" | "rectangle";
   className?: string;
 }) {
+  // Hidden from the public until ads go live — but admins still preview them.
+  if (!ADS_ENABLED) {
+    const session = await getServerSession(authOptions);
+    if (!session) return null;
+  }
+
   const t = await getTranslations("ads");
 
   const size =
@@ -34,7 +50,9 @@ export default async function AdSlot({
       <span className="font-display text-[10px] font-bold uppercase tracking-[.22em]">
         {t("label")}
       </span>
-      <span className="font-mono text-[11px] opacity-50">320×100 · 728×90</span>
+      <span className="font-mono text-[11px] opacity-50">
+        {ADS_ENABLED ? "320×100 · 728×90" : "превью · видно только админу"}
+      </span>
     </aside>
   );
 }

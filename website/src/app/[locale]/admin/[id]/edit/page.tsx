@@ -26,6 +26,8 @@ export default async function EditPostPage({
     imageUrl: post.imageUrl ?? "",
     breaking: post.breaking,
     published: post.published,
+    aspect: post.aspect,
+    gallery: post.gallery,
   };
 
   return (

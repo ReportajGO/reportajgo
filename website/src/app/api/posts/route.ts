@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isCategory } from "@/lib/constants";
+import { isCategory, isAspect } from "@/lib/constants";
 import { locales } from "@/i18n/routing";
 import { UploadError } from "@/lib/upload";
 import { parsePostInput, type PostInput } from "@/lib/postPayload";
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const { title, excerpt, content, category, language, imageUrl, breaking, published } =
+  const { title, excerpt, content, category, language, imageUrl, breaking, published, aspect, gallery } =
     input;
 
   if (!title || !excerpt || !content)
@@ -62,6 +62,8 @@ export async function POST(req: Request) {
       body: content,
       translations: JSON.stringify(translations),
       imageUrl: imageUrl || null,
+      aspect: aspect && isAspect(aspect) ? aspect : "16:9",
+      gallery: gallery && gallery.length ? JSON.stringify(gallery) : null,
       language,
       breaking: Boolean(breaking),
       published: published === undefined ? true : Boolean(published),

@@ -45,6 +45,15 @@ export default async function ArticlePage({
 
   const { emoji, text: titleText } = splitLeadingEmoji(post.title);
 
+  // Cover proportion chosen in admin. Square/portrait are centered and
+  // width-capped so they don't dominate the reading column.
+  const coverClass =
+    post.aspect === "1:1"
+      ? "mx-auto aspect-square w-full max-w-[520px]"
+      : post.aspect === "4:5"
+        ? "mx-auto aspect-[4/5] w-full max-w-[440px]"
+        : "aspect-[16/9] w-full";
+
   return (
     <>
       <article className="mx-auto max-w-[760px] py-6 sm:py-9">
@@ -70,7 +79,7 @@ export default async function ArticlePage({
           category={post.category}
           imageUrl={post.imageUrl}
           variant="lead"
-          className="mb-3 h-[220px] sm:h-[340px] lg:h-[420px]"
+          className={`mb-3 ${coverClass}`}
         />
         <p className="mb-6 font-mono text-xs text-ink-soft">
           ReportajGO · {CAT_WORD[post.category]}
@@ -100,6 +109,34 @@ export default async function ArticlePage({
             </p>
           ))}
         </div>
+
+        {/* Photo gallery (extra images attached in admin) */}
+        {post.gallery.length > 0 && (
+          <div className="mt-8">
+            <h2 className="mb-3 font-display text-lg font-extrabold tracking-tight">
+              {t("gallery")}
+            </h2>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              {post.gallery.map((src, i) => (
+                <a
+                  key={i}
+                  href={src}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block overflow-hidden rounded-xl border border-line"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt={`${titleText} — ${i + 1}`}
+                    loading="lazy"
+                    className="aspect-[4/3] w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* In-article ad */}
         <AdSlot variant="banner" className="my-7" />

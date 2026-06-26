@@ -15,8 +15,10 @@ export default async function Ticker() {
     </span>
   ));
 
+  // Background stays constant (dark) in both themes; only the font color
+  // adapts: pure white in light theme, soft white (ink) in dark theme.
   return (
-    <div className="overflow-hidden border-b border-line bg-ink text-bg">
+    <div className="overflow-hidden border-b border-white/10 bg-brand-black text-white dark:text-ink">
       <div className="flex items-center">
         <div className="z-[2] flex shrink-0 items-center gap-2 bg-brand-red px-3.5 py-[7px] font-display text-xs font-extrabold uppercase tracking-[.08em] text-white">
           <span className="h-2 w-2 animate-pulse rounded-full bg-white" />

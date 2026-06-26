@@ -20,7 +20,7 @@ export default function LangSwitcher() {
 
   return (
     <div
-      className="flex shrink-0 rounded-full border border-line bg-bg-sub p-[3px] font-display"
+      className="inline-flex w-fit shrink-0 rounded-full border border-line bg-bg-sub p-[3px] font-display"
       aria-busy={pending}
     >
       {locales.map((l) => (

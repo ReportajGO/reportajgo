@@ -1,4 +1,4 @@
-import { saveImage } from "./upload";
+import { saveImage, saveImages } from "./upload";
 
 // Parsed payload shared by JSON and multipart submissions.
 export type PostInput = {
@@ -12,6 +12,10 @@ export type PostInput = {
   // resolved image URL: a saved upload path, a kept value, or null to clear.
   // `undefined` means "field not provided" (keep existing on update).
   imageUrl?: string | null;
+  // cover aspect ratio: "16:9" | "1:1" | "4:5" (undefined = keep existing).
+  aspect?: string;
+  // final gallery URLs (kept + newly uploaded). undefined = keep existing.
+  gallery?: string[];
   // true when a brand-new file was uploaded in this request.
   uploadedNewImage: boolean;
 };
@@ -46,6 +50,22 @@ export async function parsePostInput(req: Request): Promise<PostInput> {
       imageUrl = undefined; // not provided — keep existing
     }
 
+    // Gallery: existing URLs the editor kept (JSON) + any newly added files.
+    let gallery: string[] | undefined;
+    if (has("galleryUrls") || form.getAll("gallery").length > 0) {
+      let kept: string[] = [];
+      try {
+        kept = JSON.parse(str("galleryUrls") || "[]");
+      } catch {
+        kept = [];
+      }
+      const newFiles = form
+        .getAll("gallery")
+        .filter((f): f is File => f instanceof File && f.size > 0);
+      const newUrls = await saveImages(newFiles);
+      gallery = [...kept.filter((u) => typeof u === "string"), ...newUrls];
+    }
+
     const publishedRaw = str("published");
     return {
       title: str("title"),
@@ -56,6 +76,8 @@ export async function parsePostInput(req: Request): Promise<PostInput> {
       breaking: has("breaking") ? str("breaking") === "true" : undefined,
       published: publishedRaw === undefined ? undefined : publishedRaw === "true",
       imageUrl,
+      aspect: str("aspect"),
+      gallery,
       uploadedNewImage,
     };
   }
@@ -70,6 +92,8 @@ export async function parsePostInput(req: Request): Promise<PostInput> {
     breaking: body.breaking,
     published: body.published,
     imageUrl: body.imageUrl,
+    aspect: body.aspect,
+    gallery: Array.isArray(body.gallery) ? body.gallery : undefined,
     uploadedNewImage: false,
   };
 }

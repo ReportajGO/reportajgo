@@ -70,6 +70,15 @@ export async function saveImage(file: File): Promise<string> {
   return `${PUBLIC_PREFIX}/${name}`;
 }
 
+/** Save several images (e.g. an article gallery); returns their public URLs. */
+export async function saveImages(files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const f of files) {
+    if (f instanceof File && f.size > 0) urls.push(await saveImage(f));
+  }
+  return urls;
+}
+
 /** Best-effort removal of a previously uploaded file (ignores misses). */
 export async function deleteImage(url: string | null | undefined): Promise<void> {
   if (!url || !url.startsWith(`${PUBLIC_PREFIX}/`)) return;
