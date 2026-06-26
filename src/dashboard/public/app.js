@@ -56,6 +56,9 @@ const I18N = {
     t_selectLang: "Select at least one language", t_enablePlatform: "Enable at least one platform",
     t_pickSchedule: "Pick a schedule (or enter a custom cron)", t_pickTime: "Pick a schedule time",
     t_approved: "Approved & scheduled", t_rejected: "Rejected", t_rejectReason: "Reason for rejecting? (optional)",
+    restore: "♻ Restore", reschedule: "🕑 Reschedule", confirmReject: "Confirm reject", cancel: "Cancel",
+    rejectReasonPh: "reason (optional)", rejectConfirmQ: "Reject this post?", newTime: "New time",
+    t_restored: "Restored to review", t_rescheduled: "Rescheduled",
   },
   uz: {
     appTitle: "· Boshqaruv paneli", systemStatus: "Tizim holati",
@@ -97,6 +100,9 @@ const I18N = {
     t_selectLang: "Kamida bitta tilni tanlang", t_enablePlatform: "Kamida bitta platformani yoqing",
     t_pickSchedule: "Jadvalni tanlang (yoki maxsus cron kiriting)", t_pickTime: "Reja vaqtini tanlang",
     t_approved: "Tasdiqlandi va rejaga olindi", t_rejected: "Rad etildi", t_rejectReason: "Rad etish sababi? (ixtiyoriy)",
+    restore: "♻ Tiklash", reschedule: "🕑 Qayta rejalash", confirmReject: "Rad etishni tasdiqlash", cancel: "Bekor qilish",
+    rejectReasonPh: "sabab (ixtiyoriy)", rejectConfirmQ: "Bu post rad etilsinmi?", newTime: "Yangi vaqt",
+    t_restored: "Ko‘rib chiqishga tiklandi", t_rescheduled: "Qayta rejalashtirildi",
   },
   ru: {
     appTitle: "· Панель управления", systemStatus: "Состояние системы",
@@ -138,6 +144,9 @@ const I18N = {
     t_selectLang: "Выберите хотя бы один язык", t_enablePlatform: "Включите хотя бы одну платформу",
     t_pickSchedule: "Выберите расписание (или введите свой cron)", t_pickTime: "Выберите время",
     t_approved: "Одобрено и запланировано", t_rejected: "Отклонено", t_rejectReason: "Причина отклонения? (необязательно)",
+    restore: "♻ Восстановить", reschedule: "🕑 Перенести", confirmReject: "Подтвердить отклонение", cancel: "Отмена",
+    rejectReasonPh: "причина (необязательно)", rejectConfirmQ: "Отклонить этот пост?", newTime: "Новое время",
+    t_restored: "Возвращено на проверку", t_rescheduled: "Перенесено",
   },
 };
 
@@ -428,9 +437,17 @@ function pendingCard(d) {
         <div><label>${t("scheduleLocal")}</label>
           <input type="datetime-local" class="f-when" value="${defaultWhen()}" /></div>
       </div>
-      <div class="actions">
+      <div class="actions f-act">
         <button class="ok f-approve">${t("approve")}</button>
         <button class="danger f-reject">${t("reject")}</button>
+      </div>
+      <div class="confirm-reject" hidden>
+        <span class="warn-q">⚠ ${t("rejectConfirmQ")}</span>
+        <input class="f-reason" placeholder="${t("rejectReasonPh")}" />
+        <div class="actions">
+          <button class="danger sm f-reject-confirm">${t("confirmReject")}</button>
+          <button class="ghost sm f-reject-cancel">${t("cancel")}</button>
+        </div>
       </div>
     </div>`;
   node.querySelector(".f-approve").addEventListener("click", (e) =>
@@ -451,9 +468,21 @@ function pendingCard(d) {
       loadStatus();
     }),
   );
-  node.querySelector(".f-reject").addEventListener("click", (e) =>
+  // Double verification: Reject reveals a confirm step before anything happens.
+  const actRow = node.querySelector(".f-act");
+  const confirmRow = node.querySelector(".confirm-reject");
+  node.querySelector(".f-reject").addEventListener("click", () => {
+    actRow.hidden = true;
+    confirmRow.hidden = false;
+    node.querySelector(".f-reason").focus();
+  });
+  node.querySelector(".f-reject-cancel").addEventListener("click", () => {
+    confirmRow.hidden = true;
+    actRow.hidden = false;
+  });
+  node.querySelector(".f-reject-confirm").addEventListener("click", (e) =>
     withBusy(e.target, async () => {
-      const reason = prompt(t("t_rejectReason")) ?? "";
+      const reason = node.querySelector(".f-reason").value.trim();
       await api(`/drafts/${d.id}/reject`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -477,6 +506,20 @@ function readonlyCard(d) {
   if (sp?.externalPostId) lines.push(`<div class="kv">${t("postId")} <b>${esc(sp.externalPostId)}</b></div>`);
   if (d.rejectedReason) lines.push(`<div class="kv">${t("reason")} <b>${esc(d.rejectedReason)}</b></div>`);
   if (sp?.error) lines.push(`<div class="kv">${t("errorWord")} <b>${esc(sp.error)}</b></div>`);
+
+  const canRestore = d.status === "REJECTED" || d.status === "FAILED";
+  const canReschedule = d.status === "SCHEDULED" || d.status === "FAILED";
+  const acts = [];
+  if (canRestore) acts.push(`<button class="ok sm f-restore">${t("restore")}</button>`);
+  if (canReschedule) {
+    acts.push(
+      `<span class="resched"><label>${t("newTime")}</label>` +
+        `<input type="datetime-local" class="f-when" value="${defaultWhen()}" />` +
+        `<button class="sm f-resched">${t("reschedule")}</button></span>`,
+    );
+  }
+  const actionsHtml = acts.length ? `<div class="actions card-acts">${acts.join("")}</div>` : "";
+
   node.innerHTML = `
     <div class="media">${mediaEl(d.media)}</div>
     <div class="body">
@@ -488,7 +531,37 @@ function readonlyCard(d) {
       <h3>${esc(d.newsItem?.title ?? "")}</h3>
       <div class="copy">${esc(d.body ?? "")}</div>
       ${lines.join("")}
+      ${actionsHtml}
     </div>`;
+
+  const restoreBtn = node.querySelector(".f-restore");
+  if (restoreBtn) {
+    restoreBtn.addEventListener("click", (e) =>
+      withBusy(e.target, async () => {
+        await api(`/drafts/${d.id}/restore`, { method: "POST" });
+        toast(t("t_restored"));
+        node.remove();
+        loadStatus();
+      }),
+    );
+  }
+  const reschedBtn = node.querySelector(".f-resched");
+  if (reschedBtn) {
+    reschedBtn.addEventListener("click", (e) =>
+      withBusy(e.target, async () => {
+        const whenLocal = node.querySelector(".f-when").value;
+        if (!whenLocal) throw new Error(t("t_pickTime"));
+        await api(`/drafts/${d.id}/reschedule`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ scheduledAt: new Date(whenLocal).toISOString() }),
+        });
+        toast(t("t_rescheduled"));
+        node.remove();
+        loadStatus();
+      }),
+    );
+  }
   return node;
 }
 

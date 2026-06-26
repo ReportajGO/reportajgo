@@ -244,6 +244,18 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); bo
 .kv { color: var(--faint); font-size: 0.82rem; }
 .kv b { color: var(--text); font-weight: 600; }
 
+/* Reject double-confirm + reschedule controls */
+.confirm-reject {
+  display: grid; gap: 9px; padding: 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--danger); background: oklch(67% 0.2 25 / 0.08);
+}
+.confirm-reject .warn-q { color: var(--danger); font-weight: 700; font-size: 0.86rem; }
+.confirm-reject[hidden] { display: none; }
+.card-acts { margin-top: 4px; align-items: center; }
+.resched { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.resched label { margin: 0; }
+.resched input { width: auto; }
+
 /* ── Toast ────────────────────────────────────────────── */
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);

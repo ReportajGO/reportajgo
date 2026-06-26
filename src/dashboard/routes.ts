@@ -6,7 +6,13 @@ import {
   reRegisterResearchCron,
   resumeResearchCron,
 } from "../queue/schedule.js";
-import { approveDraft, listPendingDrafts, rejectDraft } from "./approvalService.js";
+import {
+  approveDraft,
+  listPendingDrafts,
+  rejectDraft,
+  reschedulePost,
+  restoreDraft,
+} from "./approvalService.js";
 import {
   getStatus,
   listPostsByStatus,
@@ -63,6 +69,14 @@ api.post("/drafts/:id/reject", async (req, res) => {
     res.status(400).json({ ok: false, error: message });
   }
 });
+
+api.post("/drafts/:id/restore", handle((req) => restoreDraft(req.params.id ?? "")));
+
+api.post("/drafts/:id/reschedule", handle(async (req) => {
+  const { scheduledAt } = req.body ?? {};
+  if (!scheduledAt) throw new Error("scheduledAt is required");
+  return reschedulePost(req.params.id ?? "", scheduledAt);
+}));
 
 // ─── Control panel: status + actions ──────────────────────────────────────────
 api.get("/status", handle(() => getStatus()));
