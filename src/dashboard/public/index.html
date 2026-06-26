@@ -8,36 +8,44 @@
   </head>
   <body>
     <header>
-      <h1><span class="tag">ReportajGO</span> · Control Panel</h1>
+      <h1><span class="tag">ReportajGO</span> <span data-i18n="appTitle">· Control Panel</span></h1>
       <span class="sub" id="tz"></span>
-      <div class="health" id="health">
-        <span class="dot" data-h="postgres">Postgres</span>
-        <span class="dot" data-h="redis">Redis</span>
-        <span class="dot" data-h="gemini">Gemini</span>
+      <div class="topbar">
+        <div class="lang" id="lang-switch">
+          <button type="button" data-lang="en">EN</button>
+          <button type="button" data-lang="uz">UZ</button>
+          <button type="button" data-lang="ru">RU</button>
+        </div>
+        <button type="button" id="theme-toggle" class="icon-btn" title="Theme">☀️</button>
+        <div class="health" id="health">
+          <span class="dot" data-h="postgres">Postgres</span>
+          <span class="dot" data-h="redis">Redis</span>
+          <span class="dot" data-h="gemini">Gemini</span>
+        </div>
       </div>
     </header>
 
     <main>
       <!-- Status -->
-      <div class="section-title">System status</div>
+      <div class="section-title" data-i18n="systemStatus">System status</div>
       <div class="grid cards" id="stats"></div>
 
       <!-- Controls -->
       <section class="panel">
         <div class="head">
-          <h2>Pipeline controls</h2>
+          <h2 data-i18n="pipelineControls">Pipeline controls</h2>
           <span class="hint" id="cron-state"></span>
         </div>
         <div class="body">
           <div class="actions">
-            <button class="primary" id="run-pipeline">▶ Run pipeline now</button>
-            <button id="scan-now">⟳ Scan due posts</button>
-            <button class="ghost" id="toggle-cron">⏸ Pause auto-research</button>
-            <button class="ghost" id="retry-pipeline">↻ Retry failed (pipeline)</button>
-            <button class="ghost" id="retry-publish">↻ Retry failed (publish)</button>
-            <button class="ghost sm" id="refresh">⟲ Refresh</button>
+            <button class="primary" id="run-pipeline" data-i18n="runPipeline">▶ Run pipeline now</button>
+            <button id="scan-now" data-i18n="scanNow">⟳ Scan due posts</button>
+            <button class="ghost" id="toggle-cron" data-i18n="pauseCron">⏸ Pause auto-research</button>
+            <button class="ghost" id="retry-pipeline" data-i18n="retryPipeline">↻ Retry failed (pipeline)</button>
+            <button class="ghost" id="retry-publish" data-i18n="retryPublish">↻ Retry failed (publish)</button>
+            <button class="ghost sm" id="refresh" data-i18n="refresh">⟲ Refresh</button>
           </div>
-          <p class="help" id="controls-help">
+          <p class="help" id="controls-help" data-i18n="controlsHelp">
             Auto-research runs on the schedule below. “Run pipeline now” triggers an
             immediate research→copy→media cycle without waiting for the cron.
           </p>
@@ -47,23 +55,31 @@
       <!-- Settings -->
       <section class="panel">
         <div class="head">
-          <h2>Settings</h2>
-          <span class="hint">Applied live · no restart</span>
+          <h2 data-i18n="settings">Settings</h2>
+          <span class="hint" data-i18n="appliedLive">Applied live · no restart</span>
         </div>
         <div class="body">
           <div class="form-grid">
             <div class="field-wide">
-              <label>Research topics (comma-separated)</label>
-              <textarea id="s-topics" rows="2" placeholder="World news, Breaking international news, Global technology and business"></textarea>
-              <div class="help">Worldwide news — topics are searched globally, not limited to any region.</div>
+              <label data-i18n="topicsLabel">Research topics</label>
+              <div class="topic-editor">
+                <div class="topic-list" id="s-topics"></div>
+                <div class="topic-add">
+                  <input id="s-topic-input" data-i18n-ph="topicAddPh" placeholder="Add a topic, then press Enter" />
+                  <button type="button" class="sm" id="s-topic-add" data-i18n="add">Add</button>
+                </div>
+              </div>
+              <div class="help" data-i18n="topicsHelp">
+                One topic per chip. The agent searches each worldwide — add or remove as many as you like.
+              </div>
             </div>
             <div>
-              <label>Content languages</label>
+              <label data-i18n="contentLangs">Content languages</label>
               <div class="chips" id="s-langs"></div>
-              <div class="help">First selected language is the primary post language.</div>
+              <div class="help" data-i18n="contentLangsHelp">First selected language is the primary post language.</div>
             </div>
             <div>
-              <label>Gemini model</label>
+              <label data-i18n="geminiModel">Gemini model</label>
               <select id="s-model">
                 <option value="gemini-2.5-flash">gemini-2.5-flash</option>
                 <option value="gemini-2.5-pro">gemini-2.5-pro</option>
@@ -73,32 +89,32 @@
               </select>
             </div>
             <div class="field-wide">
-              <label>Enabled platforms</label>
+              <label data-i18n="enabledPlatforms">Enabled platforms</label>
               <div class="chips" id="s-platforms"></div>
             </div>
             <div class="field-wide">
-              <label>Research schedule — how often to look for news</label>
+              <label data-i18n="scheduleLabel">Research schedule — how often to look for news</label>
               <select id="s-cron-preset">
-                <option value="*/30 * * * *">Every 30 minutes</option>
-                <option value="0 * * * *">Every hour</option>
-                <option value="0 */2 * * *">Every 2 hours</option>
-                <option value="0 */4 * * *">Every 4 hours</option>
-                <option value="0 */6 * * *">Every 6 hours</option>
-                <option value="0 9,18 * * *">Twice a day (09:00 &amp; 18:00)</option>
-                <option value="0 9 * * *">Once a day (09:00)</option>
-                <option value="custom">Custom cron…</option>
+                <option value="*/30 * * * *" data-i18n="cronEvery30">Every 30 minutes</option>
+                <option value="0 * * * *" data-i18n="cronHourly">Every hour</option>
+                <option value="0 */2 * * *" data-i18n="cron2h">Every 2 hours</option>
+                <option value="0 */4 * * *" data-i18n="cron4h">Every 4 hours</option>
+                <option value="0 */6 * * *" data-i18n="cron6h">Every 6 hours</option>
+                <option value="0 9,18 * * *" data-i18n="cronTwice">Twice a day (09:00 &amp; 18:00)</option>
+                <option value="0 9 * * *" data-i18n="cronDaily">Once a day (09:00)</option>
+                <option value="custom" data-i18n="cronCustom">Custom cron…</option>
               </select>
               <input id="s-cron" placeholder="0 */2 * * *" style="display:none;margin-top:8px" />
-              <div class="help" id="cron-help">Times use the schedule timezone shown in the header.</div>
+              <div class="help" id="cron-help" data-i18n="cronHelp">Times use the schedule timezone shown in the header.</div>
             </div>
             <div>
-              <label>Integrations (read-only · set via .env)</label>
+              <label data-i18n="integrations">Integrations (read-only · set via .env)</label>
               <div class="integ" id="integrations"></div>
             </div>
           </div>
           <div class="actions">
-            <button class="ok" id="save-settings">💾 Save settings</button>
-            <button class="ghost sm" id="reset-settings">Reset form</button>
+            <button class="ok" id="save-settings" data-i18n="saveSettings">💾 Save settings</button>
+            <button class="ghost sm" id="reset-settings" data-i18n="resetForm">Reset form</button>
           </div>
         </div>
       </section>
@@ -106,17 +122,17 @@
       <!-- Content lifecycle -->
       <section class="panel">
         <div class="head">
-          <h2>Content</h2>
+          <h2 data-i18n="content">Content</h2>
           <div class="tabs" id="tabs" style="margin-left:auto">
-            <button class="tab on" data-tab="PENDING_APPROVAL">Pending <span class="badge" id="b-PENDING_APPROVAL">0</span></button>
-            <button class="tab" data-tab="SCHEDULED">Scheduled <span class="badge" id="b-SCHEDULED">0</span></button>
-            <button class="tab" data-tab="PUBLISHED">Published <span class="badge" id="b-PUBLISHED">0</span></button>
-            <button class="tab" data-tab="REJECTED">Rejected <span class="badge" id="b-REJECTED">0</span></button>
-            <button class="tab" data-tab="FAILED">Failed <span class="badge" id="b-FAILED">0</span></button>
+            <button class="tab on" data-tab="PENDING_APPROVAL"><span data-i18n="tabPending">Pending</span> <span class="badge" id="b-PENDING_APPROVAL">0</span></button>
+            <button class="tab" data-tab="SCHEDULED"><span data-i18n="tabScheduled">Scheduled</span> <span class="badge" id="b-SCHEDULED">0</span></button>
+            <button class="tab" data-tab="PUBLISHED"><span data-i18n="tabPublished">Published</span> <span class="badge" id="b-PUBLISHED">0</span></button>
+            <button class="tab" data-tab="REJECTED"><span data-i18n="tabRejected">Rejected</span> <span class="badge" id="b-REJECTED">0</span></button>
+            <button class="tab" data-tab="FAILED"><span data-i18n="tabFailed">Failed</span> <span class="badge" id="b-FAILED">0</span></button>
           </div>
         </div>
         <div class="body">
-          <div class="list" id="list"><div class="empty">Loading…</div></div>
+          <div class="list" id="list"><div class="empty" data-i18n="loading">Loading…</div></div>
         </div>
       </section>
     </main>

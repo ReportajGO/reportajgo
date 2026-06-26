@@ -16,6 +16,22 @@
   --radius-sm: 10px;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+/* ── Light theme ──────────────────────────────────────── */
+:root[data-theme="light"] {
+  --bg: oklch(97% 0.005 255);
+  --bg-2: oklch(99% 0.003 255);
+  --surface: oklch(100% 0 0);
+  --surface-2: oklch(96.5% 0.004 255);
+  --surface-3: oklch(92% 0.008 255);
+  --text: oklch(24% 0.02 255);
+  --muted: oklch(46% 0.02 255);
+  --faint: oklch(58% 0.02 255);
+  --accent: oklch(54% 0.18 255);
+  --ok: oklch(55% 0.15 150);
+  --warn: oklch(66% 0.14 85);
+  --danger: oklch(56% 0.21 25);
+  --line: oklch(80% 0.015 255 / 0.8);
+}
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -25,6 +41,12 @@ body {
     var(--bg);
   color: var(--text);
   min-height: 100vh;
+}
+[data-theme="light"] body {
+  background:
+    radial-gradient(900px 500px at 12% -8%, oklch(72% 0.1 255 / 0.18), transparent 60%),
+    radial-gradient(800px 500px at 100% 0%, oklch(70% 0.09 300 / 0.14), transparent 55%),
+    var(--bg);
 }
 
 /* ── Header ───────────────────────────────────────────── */
@@ -36,10 +58,26 @@ header {
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
+[data-theme="light"] header { background: oklch(100% 0 0 / 0.82); }
 header h1 { font-size: 1.1rem; margin: 0; letter-spacing: 0.04em; font-weight: 650; }
 header .tag { color: var(--accent); font-weight: 800; }
 header .sub { color: var(--faint); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; }
-header .health { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+header .topbar { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+header .health { display: flex; gap: 14px; align-items: center; }
+
+/* Language switcher + theme toggle */
+.lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.lang button {
+  padding: 6px 11px; border: none; border-radius: 0; background: transparent; color: var(--muted);
+  font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em;
+}
+.lang button:hover:not(.on) { background: var(--surface-2); transform: none; filter: none; }
+.lang button.on { background: var(--accent); color: oklch(100% 0 0); }
+[data-theme="light"] .lang button.on { color: oklch(100% 0 0); }
+.icon-btn {
+  padding: 7px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line);
+  font-size: 0.95rem; line-height: 1;
+}
 .dot { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
 .dot::before {
   content: ""; width: 9px; height: 9px; border-radius: 999px; background: var(--faint);
@@ -111,6 +149,33 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); bo
 @media (max-width: 720px) { .form-grid { grid-template-columns: 1fr; } }
 .field-wide { grid-column: 1 / -1; }
 .help { color: var(--faint); font-size: 0.76rem; margin-top: 5px; }
+
+/* In light mode, keep solid accent/ok buttons legible with white text. */
+[data-theme="light"] button.primary,
+[data-theme="light"] button.ok { color: oklch(100% 0 0); }
+[data-theme="light"] .badge-plat { color: oklch(100% 0 0); }
+
+/* ── Topic editor (chips with remove) ─────────────────── */
+.topic-editor {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface-2); padding: 10px; display: grid; gap: 10px;
+}
+.topic-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.topic-list .topic {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 13px; border-radius: 999px;
+  background: oklch(72% 0.16 255 / 0.16); border: 1px solid var(--accent);
+  color: var(--text); font-size: 0.85rem;
+}
+.topic-list .topic .rm {
+  width: 18px; height: 18px; padding: 0; border-radius: 999px; border: none;
+  background: var(--surface-3); color: var(--muted); font-size: 0.9rem; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.topic-list .topic .rm:hover { background: var(--danger); color: oklch(100% 0 0); transform: none; }
+.topic-list .topic-empty { color: var(--faint); font-size: 0.82rem; padding: 4px 2px; }
+.topic-add { display: flex; gap: 8px; }
+.topic-add input { flex: 1; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 9px; }
 .chip {
