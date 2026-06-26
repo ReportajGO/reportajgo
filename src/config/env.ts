@@ -91,6 +91,10 @@ const schema = z.object({
   // Cap on how many top-ranked news items get drafted per pipeline run, so a
   // high-volume topic can't flood the approval queue. Overflow is filtered out.
   MAX_ITEMS_PER_RUN: z.coerce.number().int().positive().default(8),
+  // Auto-delete news items (and their drafts/media/scheduled posts) older than
+  // this many hours, keeping the agent DB lean. Published website articles live
+  // in the website's own DB and are unaffected.
+  NEWS_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
   TZ: z.string().default("Asia/Tashkent"),
 });
 

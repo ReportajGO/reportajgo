@@ -3,6 +3,7 @@ import { logger } from "../config/logger.js";
 import { generateMediaForPendingDrafts } from "../generate/media/mediaService.js";
 import { runResearchPipeline } from "../pipeline/researchPipeline.js";
 import { publishScheduledPost } from "../publish/publishService.js";
+import { deleteStaleNews } from "../scheduler/cleanup.js";
 import { scanDueAndEnqueue } from "../scheduler/scanner.js";
 import { QUEUE_NAMES, connection } from "./connection.js";
 import type { PublishJobData } from "./queues.js";
@@ -33,10 +34,13 @@ export function startWorkers(): Worker[] {
     { connection },
   );
 
-  // Scan for due posts and enqueue publish jobs.
+  // Scan for due posts (enqueue publishes) and purge stale news each tick.
   const scheduler = new Worker(
     QUEUE_NAMES.scheduler,
-    async () => scanDueAndEnqueue(),
+    async () => {
+      await deleteStaleNews();
+      return scanDueAndEnqueue();
+    },
     { connection },
   );
 
