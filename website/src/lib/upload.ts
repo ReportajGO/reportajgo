@@ -70,6 +70,33 @@ export async function saveImage(file: File): Promise<string> {
   return `${PUBLIC_PREFIX}/${name}`;
 }
 
+// Agent-sourced images (real news photos / generated visuals) can be larger
+// than admin uploads, so allow a higher ceiling when fetching by URL.
+const MAX_URL_BYTES = 20 * 1024 * 1024; // 20 MB
+
+/**
+ * Download a remote image and persist it under public/uploads, returning the
+ * local public URL ("/uploads/…"). Used to re-host the AI agent's images so
+ * they are served same-origin (satisfies the site CSP and works off-localhost).
+ */
+export async function saveImageFromUrl(url: string): Promise<string> {
+  const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(25_000) });
+  if (!res.ok) throw new UploadError(`fetch image failed: HTTP ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length === 0) throw new UploadError("Empty image");
+  if (buffer.length > MAX_URL_BYTES) throw new UploadError("Image too large");
+
+  // Trust the bytes, not the URL extension or content-type header.
+  const realType = sniffImage(buffer);
+  if (!realType) throw new UploadError("URL did not return a supported image");
+  const ext = EXT_BY_MIME[realType];
+
+  await mkdir(UPLOAD_DIR, { recursive: true });
+  const name = `${randomUUID()}.${ext}`;
+  await writeFile(path.join(UPLOAD_DIR, name), buffer);
+  return `${PUBLIC_PREFIX}/${name}`;
+}
+
 /** Save several images (e.g. an article gallery); returns their public URLs. */
 export async function saveImages(files: File[]): Promise<string[]> {
   const urls: string[] = [];

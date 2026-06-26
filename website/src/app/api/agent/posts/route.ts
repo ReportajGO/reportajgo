@@ -4,6 +4,7 @@ import { checkApiKey } from "@/lib/agentAuth";
 import { isCategory } from "@/lib/constants";
 import { locales } from "@/i18n/routing";
 import { translateAll } from "@/lib/translate";
+import { saveImageFromUrl } from "@/lib/upload";
 
 // Prisma + remote translation need the Node.js runtime, not the edge runtime.
 export const runtime = "nodejs";
@@ -116,6 +117,16 @@ export async function POST(req: Request) {
     }
   }
 
+  // Re-host the agent's image locally so it's served same-origin (the agent
+  // serves media on another host/port over http, which the site CSP blocks).
+  // Falls back to the original URL if the download fails.
+  let localImageUrl = imageUrl as string;
+  try {
+    localImageUrl = await saveImageFromUrl(imageUrl);
+  } catch (err) {
+    console.error("[agent] image re-host failed; using remote URL:", err);
+  }
+
   // Translate into all site languages so the post shows on every locale.
   const translations = await translateAll(
     { title, excerpt, body: content },
@@ -128,7 +139,7 @@ export async function POST(req: Request) {
       excerpt,
       body: content,
       translations: JSON.stringify(translations),
-      imageUrl: imageUrl || null,
+      imageUrl: localImageUrl || null,
       language,
       breaking: Boolean(breaking),
       published: true, // already approved upstream → live now
