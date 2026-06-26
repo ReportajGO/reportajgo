@@ -5,9 +5,9 @@ dist/
 *.log
 .DS_Store
 
-# Generated media (stored in object storage in prod)
-media/
-storage/
+# Generated media output dir (root only — NOT src/generate/media source code)
+/media/
+/storage/
 
 # Prisma
 prisma/*.db
