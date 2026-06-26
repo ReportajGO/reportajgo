@@ -4,6 +4,7 @@ import { prisma } from "../../db/client.js";
 import { profileFor } from "../../domain/platforms.js";
 import type { AspectRatio, Platform } from "../../domain/types.js";
 import type { MediaResult } from "../../domain/types.js";
+import { imageHasText } from "../../research/gemini.js";
 import { renderNewsCard } from "./card.js";
 import { GeminiImageProvider } from "./geminiImage.js";
 import { getMediaProvider } from "./index.js";
@@ -32,31 +33,73 @@ async function fetchImageBytes(url: string): Promise<Buffer> {
  *  2. Otherwise generate a clean image (Higgsfield, Gemini fallback) with no
  *     text or logos.
  */
-async function generateWebsiteImage(
+export async function generateWebsiteImage(
   provider: ReturnType<typeof getMediaProvider>,
   sourceUrl: string,
   prompt: string,
   ratio: AspectRatio,
 ): Promise<MediaResult> {
-  // 1. Real news photo, if the article exposes one.
+  // 1. Real news photo — but only if it has NO words on it. A photo with
+  //    captions/watermarks/text is rejected in favour of a clean generated one.
   const found = await findArticleImageUrl(sourceUrl);
   if (found) {
     const img = await downloadImage(found);
     if (img) {
-      const stored = await saveImage(img.bytes, img.mime);
-      log.info({ url: stored.url, from: found }, "using source news photo (pure)");
-      return { provider: "source", type: "IMAGE", aspectRatio: ratio, url: stored.url, status: "READY" };
+      if (await hasText(img.bytes, img.mime)) {
+        log.info({ from: found }, "source photo has text; generating a clean image instead");
+      } else {
+        const stored = await saveImage(img.bytes, img.mime);
+        log.info({ url: stored.url, from: found }, "using source news photo (pure, no text)");
+        return { provider: "source", type: "IMAGE", aspectRatio: ratio, url: stored.url, status: "READY" };
+      }
     }
   }
 
-  // 2. Generate a pure image. NO card compositing → no logo/headline.
+  // 2. Generate a pure image (no card). Verify it's text-free; if the model
+  //    slipped in words/captions, regenerate once.
   const purePrompt = `${prompt} ${PURE_IMAGE_RULE}`;
-  let img = await provider.generateImage({ prompt: purePrompt, aspectRatio: ratio });
-  if (img.status !== "READY" && provider.name !== "gemini") {
-    log.warn({ provider: provider.name, err: img.error }, "primary image provider failed; falling back to Gemini");
-    img = await new GeminiImageProvider().generateImage({ prompt: purePrompt, aspectRatio: ratio });
+  let img = await generatePure(provider, purePrompt, ratio);
+  if (img.status === "READY" && img.url && (await urlHasText(img.url))) {
+    log.info("generated image had text; regenerating once");
+    img = await generatePure(provider, purePrompt, ratio);
   }
   return img;
+}
+
+/** Generate a pure image via the primary provider, falling back to Gemini. */
+async function generatePure(
+  provider: ReturnType<typeof getMediaProvider>,
+  prompt: string,
+  ratio: AspectRatio,
+): Promise<MediaResult> {
+  let img = await provider.generateImage({ prompt, aspectRatio: ratio });
+  if (img.status !== "READY" && provider.name !== "gemini") {
+    log.warn({ provider: provider.name, err: img.error }, "primary image provider failed; falling back to Gemini");
+    img = await new GeminiImageProvider().generateImage({ prompt, aspectRatio: ratio });
+  }
+  return img;
+}
+
+/** Text-detection on raw bytes; never throws (fail-open = treat as no text). */
+async function hasText(bytes: Buffer, mime: string): Promise<boolean> {
+  try {
+    return await imageHasText(bytes.toString("base64"), mime);
+  } catch {
+    return false;
+  }
+}
+
+/** Text-detection on an image URL; never throws. */
+async function urlHasText(url: string): Promise<boolean> {
+  try {
+    const bytes = await fetchImageBytes(url);
+    const mime = url.toLowerCase().endsWith(".jpg") || url.toLowerCase().endsWith(".jpeg")
+      ? "image/jpeg"
+      : "image/png";
+    return await imageHasText(bytes.toString("base64"), mime);
+  } catch {
+    return false;
+  }
 }
 
 /**

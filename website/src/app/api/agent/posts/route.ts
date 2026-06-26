@@ -93,6 +93,25 @@ export async function POST(req: Request) {
     dedupeKey,
   } = body;
 
+  // Image-refresh path (used by the regen script): update an existing post's
+  // photo by dedupeKey, re-hosting it locally. No other fields required.
+  const refreshImage = new URL(req.url).searchParams.get("refreshImage") === "1";
+  if (refreshImage) {
+    if (!dedupeKey || !imageUrl)
+      return NextResponse.json({ error: "refreshImage needs dedupeKey + imageUrl" }, { status: 400 });
+    const existing = await prisma.post.findUnique({ where: { dedupeKey } });
+    if (!existing)
+      return NextResponse.json({ error: "no post for dedupeKey" }, { status: 404 });
+    let local = imageUrl as string;
+    try {
+      local = await saveImageFromUrl(imageUrl);
+    } catch (err) {
+      console.error("[agent] refresh re-host failed:", err);
+    }
+    const updated = await prisma.post.update({ where: { id: existing.id }, data: { imageUrl: local } });
+    return NextResponse.json({ refreshed: true, post: { id: updated.id, imageUrl: updated.imageUrl } });
+  }
+
   if (!title || !excerpt || !content)
     return NextResponse.json(
       { error: "Missing required fields: title, excerpt, content" },

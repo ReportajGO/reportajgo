@@ -103,6 +103,24 @@ export async function generateJson<T>(prompt: string, temperature = 0.2): Promis
   return extractJson<T>(response.text ?? "");
 }
 
+/**
+ * Vision check: does the image have prominent rendered text (words, captions,
+ * subtitles, signage, watermarks, text logos) overlaid on it? Used to reject
+ * source photos that carry words. Returns false on any error (fail-open).
+ */
+export async function imageHasText(base64Data: string, mimeType: string): Promise<boolean> {
+  const prompt =
+    "Look at this image. Does it contain any prominent, legible TEXT visible on it — " +
+    "words, letters, captions, subtitles, headlines, signage, watermarks, or text-based logos? " +
+    "Ignore tiny/blurry incidental background text. Answer with ONLY one word: YES or NO.";
+  const response = await callModel({
+    model: await model(),
+    contents: [{ parts: [{ inlineData: { mimeType, data: base64Data } }, { text: prompt }] }],
+    config: { temperature: 0 },
+  });
+  return (response.text ?? "").trim().toUpperCase().startsWith("Y");
+}
+
 /** Free-form text generation (used for copywriting). */
 export async function generateText(prompt: string, temperature = 0.7): Promise<string> {
   const response = await callModel({
