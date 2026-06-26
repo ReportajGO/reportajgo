@@ -1,50 +1,42 @@
 import { env } from "../../config/env.js";
-import { logger } from "../../config/logger.js";
 import { hasRefreshToken } from "../../integrations/higgsfield/oauth.js";
-import { GeminiImageProvider } from "./geminiImage.js";
 import { HiggsfieldProvider } from "./higgsfield.js";
 import { HiggsfieldMcpProvider } from "./higgsfieldMcp.js";
 import type { MediaProvider } from "./provider.js";
 
-const log = logger.child({ module: "media" });
 let cached: MediaProvider | undefined;
 
 /**
- * Returns the configured primary media provider, selected by IMAGE_PROVIDER:
+ * Returns the image provider. Images are generated with **Higgsfield only** —
+ * there is no Gemini image fallback. Selected by IMAGE_PROVIDER:
  *  - "higgsfield-mcp": Higgsfield via MCP (OAuth; subscription credit wallet).
  *  - "higgsfield": Soul images + DoP video via the Higgsfield REST API.
- *  - "gemini": images via the Gemini image model, stored locally (no video).
- * If the selected Higgsfield path isn't set up, we fall back to Gemini (with a
- * loud warning) so the pipeline keeps producing images. The per-request fallback
- * in mediaService additionally covers mid-run failures (e.g. credits exhausted).
+ * Misconfiguration throws loudly rather than silently switching providers.
+ * (Gemini is still used elsewhere for research/copy/vision — just not images.)
  * Cached so we reuse one client across the process.
  */
 export function getMediaProvider(): MediaProvider {
   if (cached) return cached;
 
   if (env.IMAGE_PROVIDER === "higgsfield-mcp") {
-    if (hasRefreshToken()) {
-      cached = new HiggsfieldMcpProvider();
-    } else {
-      log.warn(
-        "IMAGE_PROVIDER=higgsfield-mcp but no refresh token — run `npm run higgsfield:login`. " +
-          "Falling back to Gemini images for now.",
+    if (!hasRefreshToken()) {
+      throw new Error(
+        "IMAGE_PROVIDER=higgsfield-mcp but no refresh token — run `npm run higgsfield:login`.",
       );
-      cached = new GeminiImageProvider();
     }
+    cached = new HiggsfieldMcpProvider();
   } else if (env.IMAGE_PROVIDER === "higgsfield") {
     const creds = env.HIGGSFIELD_CREDENTIALS;
-    if (creds && creds.includes(":")) {
-      cached = new HiggsfieldProvider();
-    } else {
-      log.warn(
-        "IMAGE_PROVIDER=higgsfield but HIGGSFIELD_CREDENTIALS is missing — " +
-          "falling back to Gemini images. Set KEY_ID:KEY_SECRET from cloud.higgsfield.ai to use Higgsfield.",
+    if (!creds || !creds.includes(":")) {
+      throw new Error(
+        "IMAGE_PROVIDER=higgsfield but HIGGSFIELD_CREDENTIALS (KEY_ID:KEY_SECRET) is missing.",
       );
-      cached = new GeminiImageProvider();
     }
+    cached = new HiggsfieldProvider();
   } else {
-    cached = new GeminiImageProvider();
+    throw new Error(
+      `IMAGE_PROVIDER must be 'higgsfield-mcp' or 'higgsfield' (images are Higgsfield-only); got '${env.IMAGE_PROVIDER}'.`,
+    );
   }
   return cached;
 }

@@ -6,7 +6,6 @@ import type { AspectRatio, Platform } from "../../domain/types.js";
 import type { MediaResult } from "../../domain/types.js";
 import { imageHasText } from "../../research/gemini.js";
 import { renderNewsCard } from "./card.js";
-import { GeminiImageProvider } from "./geminiImage.js";
 import { getMediaProvider } from "./index.js";
 import { saveImage } from "./mediaStore.js";
 import { composePrompt, describeScene } from "./prompts.js";
@@ -66,16 +65,18 @@ export async function generateWebsiteImage(
   return img;
 }
 
-/** Generate a pure image via the primary provider, falling back to Gemini. */
+const IMAGE_GEN_ATTEMPTS = 3;
+
+/** Generate an image with Higgsfield, retrying transient failures. No Gemini. */
 async function generatePure(
   provider: ReturnType<typeof getMediaProvider>,
   prompt: string,
   ratio: AspectRatio,
 ): Promise<MediaResult> {
   let img = await provider.generateImage({ prompt, aspectRatio: ratio });
-  if (img.status !== "READY" && provider.name !== "gemini") {
-    log.warn({ provider: provider.name, err: img.error }, "primary image provider failed; falling back to Gemini");
-    img = await new GeminiImageProvider().generateImage({ prompt, aspectRatio: ratio });
+  for (let attempt = 2; attempt <= IMAGE_GEN_ATTEMPTS && img.status !== "READY"; attempt++) {
+    log.warn({ provider: provider.name, err: img.error, attempt }, "Higgsfield image failed; retrying");
+    img = await provider.generateImage({ prompt, aspectRatio: ratio });
   }
   return img;
 }
@@ -113,15 +114,8 @@ async function generateBrandedImage(
   ratio: AspectRatio,
   headline: string,
 ) {
-  let bg = await provider.generateImage({ prompt, aspectRatio: ratio });
-
-  // If the primary provider (e.g. Higgsfield) fails — out of credits, outage —
-  // fall back to Gemini so the post still gets an image. Once the primary is
-  // healthy again it's used automatically.
-  if (bg.status !== "READY" && provider.name !== "gemini") {
-    log.warn({ provider: provider.name, err: bg.error }, "primary image provider failed; falling back to Gemini");
-    bg = await new GeminiImageProvider().generateImage({ prompt, aspectRatio: ratio });
-  }
+  // Higgsfield only — retry on transient failure, no Gemini fallback.
+  const bg = await generatePure(provider, prompt, ratio);
 
   if (!env.BRAND_CARD_ENABLED || bg.status !== "READY" || !bg.url) return bg;
 
