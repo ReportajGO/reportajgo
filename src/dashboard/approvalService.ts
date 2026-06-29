@@ -23,8 +23,14 @@ export interface ApproveInput {
 }
 
 /**
- * Approve a draft (optionally with edited copy) and schedule it.
- * Creates/replaces the ScheduledPost so the scanner will publish it.
+ * Approve a draft (optionally with edited copy) and schedule it — together with
+ * every sibling draft of the same news item. One approval decision publishes the
+ * story everywhere it was drafted (e.g. approving the Telegram preview also
+ * schedules the WEBSITE article), so the website goes live and the social posts
+ * can link back to it.
+ *
+ * Edits (body/hashtags) only apply to the reviewed draft; siblings keep theirs.
+ * Creates/replaces each ScheduledPost so the scanner will publish them.
  */
 export async function approveDraft(draftId: string, input: ApproveInput) {
   const when = new Date(input.scheduledAt);
@@ -33,6 +39,28 @@ export async function approveDraft(draftId: string, input: ApproveInput) {
   const draft = await prisma.postDraft.findUnique({ where: { id: draftId } });
   if (!draft) throw new Error("draft not found");
 
+  const approvedAt = new Date();
+
+  // Schedule one draft: mark SCHEDULED + (re)arm its ScheduledPost.
+  const schedule = async (id: string, platform: typeof draft.platform, applyEdits: boolean) => {
+    await prisma.postDraft.update({
+      where: { id },
+      data: {
+        ...(applyEdits && input.body !== undefined ? { body: input.body } : {}),
+        ...(applyEdits && input.hashtags !== undefined ? { hashtags: input.hashtags } : {}),
+        status: "SCHEDULED",
+        approvedBy: input.approver ?? null,
+        approvedAt,
+        rejectedReason: null,
+      },
+    });
+    await prisma.scheduledPost.upsert({
+      where: { draftId: id },
+      create: { draftId: id, platform, scheduledAt: when, status: "PENDING" },
+      update: { scheduledAt: when, status: "PENDING", error: null },
+    });
+  };
+
   const updated = await prisma.postDraft.update({
     where: { id: draftId },
     data: {
@@ -40,18 +68,46 @@ export async function approveDraft(draftId: string, input: ApproveInput) {
       ...(input.hashtags !== undefined ? { hashtags: input.hashtags } : {}),
       status: "SCHEDULED",
       approvedBy: input.approver ?? null,
-      approvedAt: new Date(),
+      approvedAt,
       rejectedReason: null,
     },
   });
-
   await prisma.scheduledPost.upsert({
     where: { draftId },
     create: { draftId, platform: draft.platform, scheduledAt: when, status: "PENDING" },
     update: { scheduledAt: when, status: "PENDING", error: null },
   });
 
-  log.info({ draftId, scheduledAt: when.toISOString() }, "draft approved + scheduled");
+  // Cascade to every sibling draft of the same news item that isn't already
+  // published and has a ready image — resurrecting even rejected/failed ones.
+  // This guarantees the WEBSITE article publishes alongside the social post so
+  // the post can link back to it (the whole point of one-tap approval).
+  const siblings = await prisma.postDraft.findMany({
+    where: {
+      newsItemId: draft.newsItemId,
+      id: { not: draftId },
+      status: { not: "PUBLISHED" },
+    },
+    select: {
+      id: true,
+      platform: true,
+      media: { where: { status: "READY", url: { not: null } }, select: { id: true } },
+    },
+  });
+  let scheduledSiblings = 0;
+  for (const sib of siblings) {
+    if (sib.media.length === 0) {
+      log.warn({ siblingId: sib.id, platform: sib.platform }, "sibling has no ready media; skipping");
+      continue;
+    }
+    await schedule(sib.id, sib.platform, false);
+    scheduledSiblings++;
+  }
+
+  log.info(
+    { draftId, scheduledSiblings, scheduledAt: when.toISOString() },
+    "draft approved + scheduled (with siblings)",
+  );
   return updated;
 }
 

@@ -45,6 +45,9 @@ const schema = z.object({
   // Aspect ratio for the branded card background generation.
   BRAND_CARD_RATIO: z.enum(["4:5", "1:1", "9:16", "16:9"]).default("4:5"),
 
+  // Higgsfield image model. "soul_2" (editorial) hallucinates fake/garbled text;
+  // "nano_banana_pro" follows the no-text instruction and gives clean photos.
+  HIGGSFIELD_IMAGE_MODEL: z.string().default("nano_banana_pro"),
   // Higgsfield V2 SDK uses "KEY_ID:KEY_SECRET" credentials from cloud.higgsfield.ai.
   HIGGSFIELD_CREDENTIALS: z.string().optional(),
   MEDIA_FALLBACK_PROVIDER: z.enum(["none", "fal", "replicate"]).default("none"),
@@ -75,6 +78,70 @@ const schema = z.object({
   // to WEBSITE_API_URL/api/agent/posts with WEBSITE_API_KEY as a bearer token.
   WEBSITE_API_URL: z.string().default("http://localhost:3000"),
   WEBSITE_API_KEY: z.string().optional(),
+  // Public base used to build the article link shown inside social posts. The
+  // ingest API may run on a private/localhost host (WEBSITE_API_URL); set this
+  // to the public site origin (e.g. https://reportajgo.uz) so the "read full
+  // story" link in each Telegram post is clickable. Defaults to WEBSITE_API_URL.
+  WEBSITE_PUBLIC_URL: z.string().optional(),
+
+  // ─── Social post footer (Telegram channel signature) ────────────────────────
+  // Lead emoji before the bold headline (the screenshot uses the UZ flag).
+  BRAND_FLAG_EMOJI: z.string().default("🇺🇿"),
+  // Channel/profile links rendered as the footer of each Telegram post. When a
+  // URL is set the label becomes a clickable link; otherwise it shows plain.
+  BRAND_TELEGRAM_URL: z.string().optional(),
+  BRAND_INSTAGRAM_URL: z.string().optional(),
+  BRAND_YOUTUBE_URL: z.string().optional(),
+
+  // Premium/custom emoji IDs (from a bot-owned custom_emoji set, e.g.
+  // t.me/addemoji/ApplicationEmoji). When set, the matching slot renders the
+  // animated custom emoji with the plain emoji as fallback; when empty it stays
+  // plain. The posting bot must own the set (or have a Fragment username).
+  TG_EMOJI_LEAD: z.string().optional(), // before the headline (🇺🇿)
+  TG_EMOJI_TELEGRAM: z.string().optional(), // footer 📣
+  TG_EMOJI_INSTAGRAM: z.string().optional(), // footer 📸
+  TG_EMOJI_YOUTUBE: z.string().optional(), // footer ▶️
+  TG_EMOJI_LINK: z.string().optional(), // site link 🔗
+
+  // Telegram Mini App: expose the website admin over a public HTTPS cloudflared
+  // quick tunnel and wire it to the approval bot's menu button ("app" inside the
+  // bot). Quick-tunnel hostnames are ephemeral, so the agent re-sets the button
+  // each time the tunnel (re)connects. Target origin = WEBSITE_API_URL.
+  WEBAPP_ENABLED: z
+    .string()
+    .default("true")
+    .transform((v) => v !== "false"),
+  // Path appended to the tunnel origin (default locale is "ru", admin at /ru/admin).
+  WEBAPP_PATH: z.string().default("/ru/admin"),
+  WEBAPP_MENU_TEXT: z.string().default("Admin Panel"),
+  // Optional explicit path to the cloudflared binary; defaults to ./bin/cloudflared(.exe)
+  // then a PATH lookup.
+  CLOUDFLARED_PATH: z.string().optional(),
+
+  // ─── Telegram/social card renderer ──────────────────────────────────────────
+  //  - "builtin":  the original photo+gradient+headline card (card.ts).
+  //  - "template": code reproduction of the Canva post template — rounded photo,
+  //                REPORTAJGO badge, red headline on white (templateCard.ts).
+  //  - "canva":    drive the Canva editor (Playwright). Unsafe/brittle — see
+  //                [[canva-card-renderer]]; not for production.
+  CARD_RENDERER: z.enum(["builtin", "template", "canva"]).default("builtin"),
+  // The Canva design/template edit URL (…canva.com/design/<id>/edit).
+  CANVA_TEMPLATE_URL: z.string().optional(),
+  // Persistent Chromium profile holding the one-time Canva login (gitignored).
+  CANVA_PROFILE_DIR: z.string().default(".canva-profile"),
+  // Run the Canva browser headless. Default false: headless Chromium trips
+  // Canva's Cloudflare bot-check; a real headed Chrome usually passes.
+  CANVA_HEADLESS: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
+  // Browser channel to drive ("chrome" = real Google Chrome, least detectable;
+  // empty = Playwright's bundled Chromium).
+  CANVA_BROWSER_CHANNEL: z.string().default("chrome"),
+  // Where screenshots/HTML are dumped when a Canva step fails (for calibration).
+  CANVA_DEBUG_DIR: z.string().default(".canva-debug"),
+  // Calibration map (coordinates of headline/image elements) — see brand/canva-template.json.
+  CANVA_TEMPLATE_MAP: z.string().default("brand/canva-template.json"),
 
   META_ACCESS_TOKEN: z.string().optional(),
   META_IG_BUSINESS_ID: z.string().optional(),
@@ -133,6 +200,8 @@ export const env = {
   // Default the public base URL to the local dashboard so generated media has a
   // working URL out of the box. Override PUBLIC_BASE_URL for remote publishing.
   PUBLIC_BASE_URL: raw.PUBLIC_BASE_URL || `http://localhost:${raw.DASHBOARD_PORT}`,
+  // Public site origin for in-post article links; falls back to the ingest host.
+  WEBSITE_PUBLIC_URL: raw.WEBSITE_PUBLIC_URL || raw.WEBSITE_API_URL,
   contentLanguages: csv(raw.CONTENT_LANGUAGES),
   researchTopics: csv(raw.RESEARCH_TOPICS),
   researchSources: csv(raw.RESEARCH_SOURCES),

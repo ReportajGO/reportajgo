@@ -5,7 +5,12 @@ import { profileFor } from "../../domain/platforms.js";
 import type { AspectRatio, Platform } from "../../domain/types.js";
 import type { MediaResult } from "../../domain/types.js";
 import { imageHasText } from "../../research/gemini.js";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { renderNewsCard } from "./card.js";
+import { renderTemplateCard } from "./templateCard.js";
+import { renderWithCanva } from "./canva/render.js";
 import { getMediaProvider } from "./index.js";
 import { saveImage } from "./mediaStore.js";
 import { composePrompt, describeScene } from "./prompts.js";
@@ -27,45 +32,60 @@ async function fetchImageBytes(url: string): Promise<Buffer> {
 }
 
 /**
- * Website visual policy: use a PURE image (no logo/headline overlay).
- *  1. Prefer the real news photo from the source article (re-hosted locally).
- *  2. Otherwise generate a clean image (Higgsfield, Gemini fallback) with no
- *     text or logos.
+ * Acquire a clean, WORDLESS background photo (used by both website images and
+ * branded cards — the photo must never carry baked-in/garbled text):
+ *  1. Prefer the real source article photo, but only if it's text-free.
+ *  2. Otherwise generate one, regenerating until no words are detected.
+ * Returns null when nothing usable was produced.
  */
+async function wordlessBackground(
+  provider: ReturnType<typeof getMediaProvider>,
+  sourceUrl: string | undefined,
+  prompt: string,
+  ratio: AspectRatio,
+): Promise<{ bytes: Buffer; mime: string; provider: string } | null> {
+  if (sourceUrl) {
+    const found = await findArticleImageUrl(sourceUrl);
+    if (found) {
+      const img = await downloadImage(found);
+      if (img && !(await hasText(img.bytes, img.mime))) {
+        log.info({ from: found }, "using source news photo (no text)");
+        return { bytes: img.bytes, mime: img.mime, provider: "source" };
+      }
+      if (img) log.info({ from: found }, "source photo has text; generating a clean image instead");
+    }
+  }
+
+  const purePrompt = `${prompt} ${PURE_IMAGE_RULE}`;
+  let img = await generatePure(provider, purePrompt, ratio);
+  for (let attempt = 2; attempt <= WORDLESS_ATTEMPTS; attempt++) {
+    if (img.status !== "READY" || !img.url) break;
+    if (!(await urlHasText(img.url))) break;
+    log.info({ attempt }, "image still had words; regenerating for a clean one");
+    img = await generatePure(provider, purePrompt, ratio);
+  }
+  if (img.status !== "READY" || !img.url) return null;
+  return { bytes: await fetchImageBytes(img.url), mime: "image/png", provider: img.provider };
+}
+
+/** Website visual policy: a clean, wordless photo with NO logo/headline overlay. */
 export async function generateWebsiteImage(
   provider: ReturnType<typeof getMediaProvider>,
   sourceUrl: string,
   prompt: string,
   ratio: AspectRatio,
 ): Promise<MediaResult> {
-  // 1. Real news photo — but only if it has NO words on it. A photo with
-  //    captions/watermarks/text is rejected in favour of a clean generated one.
-  const found = await findArticleImageUrl(sourceUrl);
-  if (found) {
-    const img = await downloadImage(found);
-    if (img) {
-      if (await hasText(img.bytes, img.mime)) {
-        log.info({ from: found }, "source photo has text; generating a clean image instead");
-      } else {
-        const stored = await saveImage(img.bytes, img.mime);
-        log.info({ url: stored.url, from: found }, "using source news photo (pure, no text)");
-        return { provider: "source", type: "IMAGE", aspectRatio: ratio, url: stored.url, status: "READY" };
-      }
-    }
+  const photo = await wordlessBackground(provider, sourceUrl, prompt, ratio);
+  if (!photo) {
+    return { provider: provider.name, type: "IMAGE", aspectRatio: ratio, status: "FAILED", error: "image generation failed" };
   }
-
-  // 2. Generate a pure image (no card). Verify it's text-free; if the model
-  //    slipped in words/captions, regenerate once.
-  const purePrompt = `${prompt} ${PURE_IMAGE_RULE}`;
-  let img = await generatePure(provider, purePrompt, ratio);
-  if (img.status === "READY" && img.url && (await urlHasText(img.url))) {
-    log.info("generated image had text; regenerating once");
-    img = await generatePure(provider, purePrompt, ratio);
-  }
-  return img;
+  const stored = await saveImage(photo.bytes, photo.mime);
+  return { provider: photo.provider, type: "IMAGE", aspectRatio: ratio, url: stored.url, status: "READY" };
 }
 
 const IMAGE_GEN_ATTEMPTS = 3;
+// How many times to regenerate a website image while words are still detected.
+const WORDLESS_ATTEMPTS = 3;
 
 /** Generate an image with Higgsfield, retrying transient failures. No Gemini. */
 async function generatePure(
@@ -104,26 +124,45 @@ async function urlHasText(url: string): Promise<boolean> {
 }
 
 /**
- * Generate the background image, then (when enabled) composite it into the
- * branded news card: GO logo + red accent bar + uppercase headline. Returns a
- * MediaResult pointing at the final card.
+ * Acquire a clean wordless background photo, then composite it into the branded
+ * card (template / built-in / Canva). The headline is the ONLY text on the card.
  */
 async function generateBrandedImage(
   provider: ReturnType<typeof getMediaProvider>,
+  sourceUrl: string,
   prompt: string,
   ratio: AspectRatio,
   headline: string,
-) {
-  // Higgsfield only — retry on transient failure, no Gemini fallback.
-  const bg = await generatePure(provider, prompt, ratio);
+): Promise<MediaResult> {
+  const photo = await wordlessBackground(provider, sourceUrl, prompt, ratio);
+  if (!photo) {
+    return { provider: provider.name, type: "IMAGE", aspectRatio: ratio, status: "FAILED", error: "image generation failed" };
+  }
 
-  if (!env.BRAND_CARD_ENABLED || bg.status !== "READY" || !bg.url) return bg;
+  if (!env.BRAND_CARD_ENABLED) {
+    const stored = await saveImage(photo.bytes, photo.mime);
+    return { provider: photo.provider, type: "IMAGE", aspectRatio: ratio, url: stored.url, status: "READY" };
+  }
 
-  const bgBytes = await fetchImageBytes(bg.url);
-  const cardBuf = await renderNewsCard({ background: bgBytes, headline });
+  // Pick the card renderer: template reproduction, original built-in, or Canva.
+  const renderer = env.CARD_RENDERER;
+  const cardBuf =
+    renderer === "canva"
+      ? await renderCanvaCard(photo.bytes, headline)
+      : renderer === "template"
+        ? await renderTemplateCard({ background: photo.bytes, headline })
+        : await renderNewsCard({ background: photo.bytes, headline });
   const stored = await saveImage(cardBuf, "image/png");
-  log.info({ url: stored.url }, "branded card composited");
-  return { ...bg, url: stored.url, provider: `${bg.provider}+card` };
+  log.info({ url: stored.url, renderer, photo: photo.provider }, "branded card composited");
+  return { provider: `${photo.provider}+${renderer}`, type: "IMAGE", aspectRatio: ratio, url: stored.url, status: "READY" };
+}
+
+/** Write the background photo to a temp file and run it through the Canva template. */
+async function renderCanvaCard(bg: Buffer, headline: string): Promise<Buffer> {
+  const dir = await mkdtemp(join(tmpdir(), "canva-bg-"));
+  const path = join(dir, "bg.png");
+  await writeFile(path, bg);
+  return renderWithCanva({ headline, imagePath: path });
 }
 
 /**
@@ -164,7 +203,7 @@ export async function generateMediaForPendingDrafts(): Promise<{
       const image = await persistAsset(draft.id, "IMAGE", ratio, imagePrompt, provider.name, () =>
         isWebsite
           ? generateWebsiteImage(provider, draft.newsItem.sourceUrl, imagePrompt, ratio)
-          : generateBrandedImage(provider, imagePrompt, ratio, headline),
+          : generateBrandedImage(provider, draft.newsItem.sourceUrl, imagePrompt, ratio, headline),
       );
 
       if (profile.media.type === "VIDEO") {

@@ -24,6 +24,35 @@ export async function publishScheduledPost(scheduledPostId: string): Promise<voi
     log.info({ scheduledPostId }, "already published; skipping");
     return;
   }
+  if (sp.status === "CANCELLED") {
+    log.info({ scheduledPostId }, "post cancelled; skipping");
+    return;
+  }
+
+  const news = sp.draft.newsItem;
+  const platform = sp.platform as Platform;
+
+  // Website-first: a social post must wait until its website sibling is live so
+  // it can link back to the full article. If the website post for this story
+  // hasn't published yet, fail this attempt — BullMQ retries with backoff, by
+  // which time the website job has run.
+  let articleUrl: string | undefined;
+  let articleBody: string | undefined;
+  if (platform !== "WEBSITE" && news) {
+    // The social post carries the WEBSITE article's text + link, so load the
+    // website sibling draft (its body) and gate on its publish having happened.
+    const websiteDraft = await prisma.postDraft.findFirst({
+      where: { platform: "WEBSITE", newsItemId: news.id },
+      select: { body: true, scheduledPost: { select: { status: true } } },
+    });
+    const websiteStatus = websiteDraft?.scheduledPost?.status;
+    if (websiteStatus && websiteStatus !== "PUBLISHED") {
+      log.info({ scheduledPostId, websiteStatus }, "waiting for website publish");
+      throw new Error("waiting for website article to publish before social post");
+    }
+    articleUrl = news.websiteUrl ?? undefined;
+    articleBody = websiteDraft?.body ?? undefined;
+  }
 
   await prisma.scheduledPost.update({
     where: { id: sp.id },
@@ -35,13 +64,14 @@ export async function publishScheduledPost(scheduledPostId: string): Promise<voi
       .filter((m) => m.status === "READY" && m.url)
       .map((m) => ({ type: m.type as MediaType, url: m.url! }));
 
-    const news = sp.draft.newsItem;
-    const publisher = getPublisher(sp.platform as Platform);
+    const publisher = getPublisher(platform);
     const result = await publisher.publish({
-      platform: sp.platform as Platform,
-      body: sp.draft.body,
+      platform,
+      // Social posts carry the website article's body; website uses its own.
+      body: articleBody ?? sp.draft.body,
       hashtags: sp.draft.hashtags,
       media,
+      articleUrl,
       article: news
         ? {
             title: sp.draft.headline?.trim() || news.title,
@@ -66,6 +96,10 @@ export async function publishScheduledPost(scheduledPostId: string): Promise<voi
         },
       }),
       prisma.postDraft.update({ where: { id: sp.draftId }, data: { status: "PUBLISHED" } }),
+      // Record the live article URL so social siblings can link back to it.
+      ...(platform === "WEBSITE" && result.url && news
+        ? [prisma.newsItem.update({ where: { id: news.id }, data: { websiteUrl: result.url } })]
+        : []),
     ]);
 
     log.info({ scheduledPostId, externalPostId: result.externalPostId }, "published");

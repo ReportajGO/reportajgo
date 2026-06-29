@@ -15,10 +15,16 @@ const BACKOFF_MS = 30_000;
  */
 export async function scanDueAndEnqueue(): Promise<number> {
   const now = new Date();
-  const due = await prisma.scheduledPost.findMany({
+  const dueRows = await prisma.scheduledPost.findMany({
     where: { status: "PENDING", scheduledAt: { lte: now } },
-    select: { id: true },
+    select: { id: true, platform: true },
   });
+
+  // Enqueue WEBSITE posts first so the article is live (and its URL stored)
+  // before any social sibling publishes — social posts link back to it.
+  const due = [...dueRows].sort((a, b) =>
+    (a.platform === "WEBSITE" ? 0 : 1) - (b.platform === "WEBSITE" ? 0 : 1),
+  );
 
   for (const sp of due) {
     await publishQueue.add(

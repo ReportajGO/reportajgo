@@ -1,3 +1,4 @@
+import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { mcpCallTool } from "../../integrations/higgsfield/mcpClient.js";
 import type { AspectRatio, MediaResult } from "../../domain/types.js";
@@ -5,7 +6,8 @@ import type { ImageGenRequest, MediaProvider, VideoGenRequest } from "./provider
 
 const log = logger.child({ module: "higgsfield-mcp-provider" });
 
-const IMAGE_MODEL = "soul_2";
+// "soul_2" hallucinates gibberish captions; "nano_banana_pro" obeys "no text".
+const IMAGE_MODEL = env.HIGGSFIELD_IMAGE_MODEL || "nano_banana_pro";
 const MAX_POLLS = 20;
 const POLL_DELAY_MS = 3000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

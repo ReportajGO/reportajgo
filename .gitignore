@@ -27,3 +27,20 @@ coverage/
 .next/
 website/public/uploads/*
 !website/public/uploads/.gitkeep
+
+# cloudflared binary for Telegram Mini App tunnel
+/bin/cloudflared
+/bin/cloudflared.exe
+
+# Canva automation (login session + debug dumps)
+/.canva-profile/
+/.canva-debug/
+
+# Throwaway POC / debug runner scripts (may contain inline tokens)
+/_run*.mts
+/_*.mts
+
+# Throwaway sample renders at repo root
+/sample-post.png
+/telegram-card-final.png
+/telegram-sample-post.png

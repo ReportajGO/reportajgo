@@ -4,8 +4,10 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { prisma } from "../db/client.js";
 import { approveDraft, rejectDraft } from "../dashboard/approvalService.js";
+import { scanNow } from "../dashboard/controlService.js";
 import { MEDIA_ROOT } from "../generate/media/mediaStore.js";
 import { handleControlPanelText, mainMenu, registerControlPanel } from "./controlPanel.js";
+import { startWebApp } from "./webApp.js";
 
 const log = logger.child({ module: "telegram-approval" });
 
@@ -80,6 +82,7 @@ function keyboard(draftId: string) {
         { text: "✅ Approve", callback_data: `ap:${draftId}` },
         { text: "❌ Reject", callback_data: `rj:${draftId}` },
       ],
+      [{ text: "⚡ Publish now", callback_data: `pn:${draftId}` }],
     ],
   };
 }
@@ -115,15 +118,29 @@ async function sweep(): Promise<void> {
       newsItem: { select: { sourceName: true, sourceUrl: true } },
     },
     orderBy: { createdAt: "asc" },
-    take: 10,
-  })) as unknown as DraftForApproval[];
+    take: 30,
+  })) as unknown as (DraftForApproval & { newsItemId: string })[];
 
-  for (const draft of drafts) {
+  // One approval card per news item — prefer the TELEGRAM preview. Approving it
+  // cascades to the other platforms (e.g. the WEBSITE article) automatically.
+  const byNews = new Map<string, (typeof drafts)[number]>();
+  for (const d of drafts) {
+    const current = byNews.get(d.newsItemId);
+    if (!current || (d.platform === "TELEGRAM" && current.platform !== "TELEGRAM")) {
+      byNews.set(d.newsItemId, d);
+    }
+  }
+
+  for (const draft of byNews.values()) {
     if (draft.media.length === 0) continue; // media not ready yet
     try {
       for (const chat of approvers) await sendApprovalMessage(chat, draft);
-      await prisma.postDraft.update({ where: { id: draft.id }, data: { approvalSentAt: new Date() } });
-      log.info({ draftId: draft.id }, "approval message sent");
+      // Silence the sibling cards for this news item — they're approved together.
+      await prisma.postDraft.updateMany({
+        where: { newsItemId: draft.newsItemId, status: "PENDING_APPROVAL", approvalSentAt: null },
+        data: { approvalSentAt: new Date() },
+      });
+      log.info({ draftId: draft.id, newsItemId: draft.newsItemId }, "approval message sent");
     } catch (err) {
       log.error({ err, draftId: draft.id }, "failed to send approval message");
     }
@@ -173,9 +190,26 @@ export function startApprovalBot(): { stop: () => void } | undefined {
         scheduledAt: new Date().toISOString(),
         approver: `tg:${ctx.from?.id ?? "unknown"}`,
       });
-      await ctx.answerCbQuery("Approved ✓");
+      await scanNow(); // publish right away (website first, then channel) — no 60s wait
+      await ctx.answerCbQuery("Approved & publishing ✓");
       await ctx.editMessageReplyMarkup(undefined).catch(() => {});
-      await ctx.reply("✅ Approved & scheduled.");
+      await ctx.reply("✅ Approved — publishing the website article and channel post now.");
+    } catch (err) {
+      await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true });
+    }
+  });
+
+  bot.action(/^pn:(.+)$/, async (ctx) => {
+    const id = ctx.match[1]!;
+    try {
+      await approveDraft(id, {
+        scheduledAt: new Date().toISOString(),
+        approver: `tg:${ctx.from?.id ?? "unknown"}:instant`,
+      });
+      await scanNow(); // don't wait for the 60s scanner — publish right away
+      await ctx.answerCbQuery("Publishing now ⚡");
+      await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+      await ctx.reply("⚡ Approved & publishing now.");
     } catch (err) {
       await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true });
     }
@@ -195,11 +229,14 @@ export function startApprovalBot(): { stop: () => void } | undefined {
 
   void bot.launch().catch((err) => log.error({ err }, "approval bot launch failed"));
   const timer = setInterval(() => void sweep().catch((err) => log.error({ err }, "sweep failed")), SWEEP_MS);
+  // Expose the website admin as a Telegram Mini App (menu button → cloudflared tunnel).
+  const webApp = startWebApp(bot);
   log.info("telegram approval bot started");
 
   return {
     stop: () => {
       clearInterval(timer);
+      webApp?.stop();
       bot?.stop();
     },
   };

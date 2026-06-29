@@ -26,7 +26,7 @@ export default async function AdminLayout({
     <AdminProviders>
       <div className="min-h-screen bg-bg-sub">
         <header className="border-b border-line bg-bg">
-          <div className="mx-auto flex max-w-page items-center gap-4 px-[22px] py-3.5">
+          <div className="mx-auto flex max-w-page items-center gap-3 px-4 py-3.5 sm:gap-4 sm:px-[22px]">
             <Logo size="sm" />
             <span className="hidden font-display text-sm font-bold text-ink-soft sm:block">
               {t("title")}
@@ -41,7 +41,7 @@ export default async function AdminLayout({
             <SignOutButton />
           </div>
         </header>
-        <main className="mx-auto max-w-page px-[22px] py-8">{children}</main>
+        <main className="mx-auto max-w-page px-4 py-6 sm:px-[22px] sm:py-8">{children}</main>
       </div>
     </AdminProviders>
   );

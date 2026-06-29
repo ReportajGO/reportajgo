@@ -59,6 +59,7 @@ const I18N = {
     restore: "♻ Restore", reschedule: "🕑 Reschedule", confirmReject: "Confirm reject", cancel: "Cancel",
     rejectReasonPh: "reason (optional)", rejectConfirmQ: "Reject this post?", newTime: "New time",
     t_restored: "Restored to review", t_rescheduled: "Rescheduled",
+    publishNow: "Publish now", t_publishing: "Publishing now…", zoomHint: "click to enlarge",
   },
   uz: {
     appTitle: "· Boshqaruv paneli", systemStatus: "Tizim holati",
@@ -103,6 +104,7 @@ const I18N = {
     restore: "♻ Tiklash", reschedule: "🕑 Qayta rejalash", confirmReject: "Rad etishni tasdiqlash", cancel: "Bekor qilish",
     rejectReasonPh: "sabab (ixtiyoriy)", rejectConfirmQ: "Bu post rad etilsinmi?", newTime: "Yangi vaqt",
     t_restored: "Ko‘rib chiqishga tiklandi", t_rescheduled: "Qayta rejalashtirildi",
+    publishNow: "Hozir e’lon qilish", t_publishing: "Hozir e’lon qilinmoqda…", zoomHint: "kattalashtirish uchun bosing",
   },
   ru: {
     appTitle: "· Панель управления", systemStatus: "Состояние системы",
@@ -147,6 +149,7 @@ const I18N = {
     restore: "♻ Восстановить", reschedule: "🕑 Перенести", confirmReject: "Подтвердить отклонение", cancel: "Отмена",
     rejectReasonPh: "причина (необязательно)", rejectConfirmQ: "Отклонить этот пост?", newTime: "Новое время",
     t_restored: "Возвращено на проверку", t_rescheduled: "Перенесено",
+    publishNow: "Опубликовать сейчас", t_publishing: "Публикуется сейчас…", zoomHint: "нажмите, чтобы увеличить",
   },
 };
 
@@ -180,7 +183,7 @@ function setLang(next) {
 }
 
 // ── theme ────────────────────────────────────────────────
-let theme = localStorage.getItem("rg_theme") || "dark";
+let theme = localStorage.getItem("rg_theme") || "light";
 function applyTheme() {
   document.documentElement.dataset.theme = theme;
   el("theme-toggle").textContent = theme === "dark" ? "☀️" : "🌙";
@@ -412,8 +415,30 @@ function mediaEl(media) {
   const m = (media || [])[0];
   if (!m) return '<div class="nomedia">—</div>';
   if (m.type === "VIDEO") return `<video src="${esc(m.url)}" controls muted loop></video>`;
-  return `<img src="${esc(m.url)}" alt="generated visual" />`;
+  return `<img src="${esc(m.url)}" alt="generated visual" class="zoomable" title="${t("zoomHint")}" />`;
 }
+
+// Full-size image viewer (lightbox). Click any card image to open.
+function openLightbox(url) {
+  let lb = el("lightbox");
+  if (!lb) {
+    lb = document.createElement("div");
+    lb.id = "lightbox";
+    lb.className = "lightbox";
+    lb.innerHTML = '<img alt="full size" />';
+    lb.addEventListener("click", () => lb.classList.remove("show"));
+    document.body.appendChild(lb);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") lb.classList.remove("show");
+    });
+  }
+  lb.querySelector("img").src = url;
+  lb.classList.add("show");
+}
+document.addEventListener("click", (e) => {
+  const img = e.target.closest && e.target.closest(".media img.zoomable");
+  if (img) openLightbox(img.src);
+});
 
 function pendingCard(d) {
   const node = document.createElement("article");
@@ -426,7 +451,7 @@ function pendingCard(d) {
         <span class="src">${esc(d.newsItem?.sourceName ?? t("sourceWord"))} ·
           <a href="${esc(d.newsItem?.sourceUrl)}" target="_blank" rel="noopener">${t("linkWord")}</a></span>
       </div>
-      <h3>${esc(d.newsItem?.title ?? "")}</h3>
+      <h3>${esc(d.headline?.trim() || d.newsItem?.title || "")}</h3>
       <div>
         <label>${t("postCopy")} (${esc(d.language)})</label>
         <textarea rows="6" class="f-body">${esc(d.body ?? "")}</textarea>
@@ -438,6 +463,7 @@ function pendingCard(d) {
           <input type="datetime-local" class="f-when" value="${defaultWhen()}" /></div>
       </div>
       <div class="actions f-act">
+        <button class="primary f-publish-now">${t("publishNow")}</button>
         <button class="ok f-approve">${t("approve")}</button>
         <button class="danger f-reject">${t("reject")}</button>
       </div>
@@ -450,6 +476,22 @@ function pendingCard(d) {
         </div>
       </div>
     </div>`;
+  // Instant publish: approve at "now" and publish immediately.
+  node.querySelector(".f-publish-now").addEventListener("click", (e) =>
+    withBusy(e.target, async () => {
+      await api(`/drafts/${d.id}/publish-now`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          body: node.querySelector(".f-body").value,
+          hashtags: csv(node.querySelector(".f-tags").value),
+        }),
+      });
+      toast(t("t_publishing"));
+      node.remove();
+      loadStatus();
+    }),
+  );
   node.querySelector(".f-approve").addEventListener("click", (e) =>
     withBusy(e.target, async () => {
       const whenLocal = node.querySelector(".f-when").value;
@@ -528,7 +570,7 @@ function readonlyCard(d) {
         <span class="badge-status s-${esc(d.status)}">${esc(d.status)}</span>
         <span class="src">${esc(d.newsItem?.sourceName ?? t("sourceWord"))}</span>
       </div>
-      <h3>${esc(d.newsItem?.title ?? "")}</h3>
+      <h3>${esc(d.headline?.trim() || d.newsItem?.title || "")}</h3>
       <div class="copy">${esc(d.body ?? "")}</div>
       ${lines.join("")}
       ${actionsHtml}

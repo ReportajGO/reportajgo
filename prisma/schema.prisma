@@ -26,6 +26,11 @@ model NewsItem {
   // Dedupe key: normalized hash of title+url. Unique to drop repeats.
   contentHash String @unique
 
+  // Public URL of the published website article (set once the WEBSITE post goes
+  // live). Social posts (Telegram, etc.) append this so each post links back to
+  // the full story on the site.
+  websiteUrl String?
+
   // Ranking (filled by the filter stage)
   score       Float?
   relevance   Float?

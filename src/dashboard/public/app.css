@@ -1,52 +1,54 @@
+/* ─────────────────────────────────────────────────────────
+   ReportajGO brandbook palette — red / black / cream paper.
+   Light "paper" editorial theme is the default; dark is a variant.
+   ───────────────────────────────────────────────────────── */
 :root {
-  --bg: oklch(19% 0.02 255);
-  --bg-2: oklch(16% 0.02 255);
-  --surface: oklch(25% 0.02 255);
-  --surface-2: oklch(30% 0.02 255);
-  --surface-3: oklch(34% 0.02 255);
-  --text: oklch(96% 0.01 255);
-  --muted: oklch(72% 0.02 255);
-  --faint: oklch(58% 0.02 255);
-  --accent: oklch(72% 0.16 255);
-  --ok: oklch(74% 0.16 150);
-  --warn: oklch(80% 0.14 85);
-  --danger: oklch(67% 0.2 25);
-  --line: oklch(42% 0.02 255 / 0.4);
+  /* Copied from the website (globals.css + tailwind.config). Font kept separate. */
+  --bg: #F3F4F7;          /* bg-sub — page */
+  --bg-2: #EEF0F4;
+  --surface: #FFFFFF;     /* surface — cards/panels */
+  --surface-2: #F3F4F7;
+  --surface-3: #E7E9EF;
+  --text: #0A0D15;        /* ink */
+  --muted: #5B6172;       /* ink-soft */
+  --faint: #8A91A2;
+  --accent: #E51A24;      /* brand red */
+  --accent-strong: #B3121A; /* red-ink — hover/pressed */
+  --accent-ink: #FFFFFF;
+  --ok: #1F9D57;
+  --warn: #C2870C;
+  --danger: #E51A24;
+  --line: #E4E6EC;        /* border */
+  --shadow-card: 0 1px 2px rgb(16 20 30 / 0.06), 0 8px 24px rgb(16 20 30 / 0.06);
   --radius: 14px;
   --radius-sm: 10px;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-/* ── Light theme ──────────────────────────────────────── */
-:root[data-theme="light"] {
-  --bg: oklch(97% 0.005 255);
-  --bg-2: oklch(99% 0.003 255);
-  --surface: oklch(100% 0 0);
-  --surface-2: oklch(96.5% 0.004 255);
-  --surface-3: oklch(92% 0.008 255);
-  --text: oklch(24% 0.02 255);
-  --muted: oklch(46% 0.02 255);
-  --faint: oklch(58% 0.02 255);
-  --accent: oklch(54% 0.18 255);
-  --ok: oklch(55% 0.15 150);
-  --warn: oklch(66% 0.14 85);
-  --danger: oklch(56% 0.21 25);
-  --line: oklch(80% 0.015 255 / 0.8);
+/* ── Dark variant (matches the website .dark theme) ───── */
+:root[data-theme="dark"] {
+  --bg: #10141E;
+  --bg-2: #0A0D15;
+  --surface: #141925;
+  --surface-2: #10141E;
+  --surface-3: #242C3C;
+  --text: #E9ECF3;
+  --muted: #9AA2B5;
+  --faint: #707A8E;
+  --accent: #FF1E27;      /* brand red-hot pops on black */
+  --accent-strong: #E51A24;
+  --accent-ink: #FFFFFF;  /* white label on red, both themes */
+  --ok: #34C77B;
+  --warn: #E0A82E;
+  --danger: #FF1E27;
+  --line: #242C3C;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px rgb(0 0 0 / 0.45);
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background:
-    radial-gradient(900px 500px at 12% -8%, oklch(30% 0.06 255 / 0.5), transparent 60%),
-    radial-gradient(800px 500px at 100% 0%, oklch(28% 0.05 300 / 0.35), transparent 55%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-}
-[data-theme="light"] body {
-  background:
-    radial-gradient(900px 500px at 12% -8%, oklch(72% 0.1 255 / 0.18), transparent 60%),
-    radial-gradient(800px 500px at 100% 0%, oklch(70% 0.09 300 / 0.14), transparent 55%),
-    var(--bg);
 }
 
 /* ── Header ───────────────────────────────────────────── */
@@ -54,13 +56,20 @@ header {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 16px;
   padding: 16px 26px;
-  background: oklch(15% 0.02 255 / 0.78);
+  background: rgb(255 255 255 / 0.85);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
-[data-theme="light"] header { background: oklch(100% 0 0 / 0.82); }
+:root[data-theme="dark"] header { background: rgb(20 25 37 / 0.85); }
 header h1 { font-size: 1.1rem; margin: 0; letter-spacing: 0.04em; font-weight: 650; }
 header .tag { color: var(--accent); font-weight: 800; }
+/* Brand logo chip — white background so the dark wordmark reads on any theme */
+.brand-h { display: inline-flex; align-items: center; gap: 10px; }
+.brand { display: inline-flex; align-items: center; }
+.brand img { height: 24px; display: block; }
+/* Dark header: put the dark wordmark on a white chip so it stays legible */
+:root[data-theme="dark"] .brand { background: #fff; border-radius: 8px; padding: 5px 10px; }
+.brand-sub { color: var(--faint); font-size: 0.82rem; font-weight: 600; }
 header .sub { color: var(--faint); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; }
 header .topbar { margin-left: auto; display: flex; gap: 16px; align-items: center; }
 header .health { display: flex; gap: 14px; align-items: center; }
@@ -91,15 +100,17 @@ main { max-width: 1120px; margin: 0 auto; padding: 26px 22px 90px; display: grid
 
 /* ── Section + cards ──────────────────────────────────── */
 .section-title {
-  font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--faint); margin: 6px 2px -4px; font-weight: 700;
+  font-size: 0.74rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent); margin: 6px 2px -4px; font-weight: 800;
+  display: flex; align-items: center; gap: 8px;
 }
+.section-title::before { content: ""; width: 16px; height: 3px; background: var(--accent); border-radius: 2px; }
 .grid { display: grid; gap: 14px; }
 .cards { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .stat {
-  background: linear-gradient(160deg, var(--surface), var(--bg-2));
+  background: var(--surface);
   border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 16px 18px; display: grid; gap: 4px;
+  padding: 16px 18px; display: grid; gap: 4px; box-shadow: var(--shadow-card);
 }
 .stat .k { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
 .stat .v { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
@@ -110,7 +121,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 26px 22px 90px; display: grid
 
 .panel {
   background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); overflow: hidden;
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-card);
 }
 .panel > .head {
   display: flex; align-items: center; gap: 12px;
@@ -123,19 +134,44 @@ main { max-width: 1120px; margin: 0 auto; padding: 26px 22px 90px; display: grid
 /* ── Buttons ──────────────────────────────────────────── */
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 button {
-  padding: 10px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--surface-2); color: var(--text); font: inherit; font-weight: 600;
-  cursor: pointer; transition: transform 120ms, filter 120ms, background 120ms;
+  padding: 10px 17px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text); font: inherit; font-weight: 650;
+  letter-spacing: 0.005em; cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease, transform 100ms ease, border-color 140ms ease;
   display: inline-flex; align-items: center; gap: 8px;
 }
-button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
-button:active:not(:disabled) { transform: translateY(0); }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-button.primary { background: var(--accent); border-color: transparent; color: oklch(18% 0.02 255); }
-button.ok { background: var(--ok); border-color: transparent; color: oklch(18% 0.02 150); }
-button.ghost { background: transparent; }
+button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--faint); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Primary (red) — solid brand fill, soft red-tinted shadow, darken on hover */
+button.primary {
+  background: var(--accent); border-color: transparent; color: var(--accent-ink);
+  font-weight: 700; box-shadow: 0 1px 1px rgb(16 20 30 / 0.08), 0 3px 10px rgb(229 26 36 / 0.28);
+}
+button.primary:hover:not(:disabled) {
+  background: var(--accent-strong); border-color: transparent;
+  box-shadow: 0 2px 4px rgb(16 20 30 / 0.1), 0 6px 16px rgb(229 26 36 / 0.34); transform: translateY(-1px);
+}
+button.primary:active:not(:disabled) { transform: translateY(0); box-shadow: 0 1px 4px rgb(229 26 36 / 0.3); }
+
+/* Success (green) — same treatment */
+button.ok {
+  background: var(--ok); border-color: transparent; color: #fff;
+  font-weight: 700; box-shadow: 0 1px 1px rgb(16 20 30 / 0.08), 0 3px 10px rgb(31 157 87 / 0.26);
+}
+button.ok:hover:not(:disabled) {
+  background: #1A864A; border-color: transparent;
+  box-shadow: 0 2px 4px rgb(16 20 30 / 0.1), 0 6px 16px rgb(31 157 87 / 0.32); transform: translateY(-1px);
+}
+button.ok:active:not(:disabled) { transform: translateY(0); }
+
+button.ghost { background: transparent; border-color: transparent; }
+button.ghost:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line); }
 button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
-button.sm { padding: 7px 12px; font-size: 0.84rem; }
+button.danger:hover:not(:disabled) { background: var(--danger); color: #fff; border-color: transparent; }
+button.sm { padding: 7px 13px; font-size: 0.84rem; }
 
 /* ── Forms ────────────────────────────────────────────── */
 label { font-size: 0.74rem; color: var(--muted); letter-spacing: 0.04em; display: block; margin-bottom: 6px; }
@@ -150,10 +186,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); bo
 .field-wide { grid-column: 1 / -1; }
 .help { color: var(--faint); font-size: 0.76rem; margin-top: 5px; }
 
-/* In light mode, keep solid accent/ok buttons legible with white text. */
-[data-theme="light"] button.primary,
-[data-theme="light"] button.ok { color: oklch(100% 0 0); }
-[data-theme="light"] .badge-plat { color: oklch(100% 0 0); }
+/* (brand buttons use white text on red/green in both themes) */
 
 /* ── Topic editor (chips with remove) ─────────────────── */
 .topic-editor {
@@ -164,7 +197,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); bo
 .topic-list .topic {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 8px 6px 13px; border-radius: 999px;
-  background: oklch(72% 0.16 255 / 0.16); border: 1px solid var(--accent);
+  background: rgb(225 20 20 / 0.10); border: 1px solid var(--accent);
   color: var(--text); font-size: 0.85rem;
 }
 .topic-list .topic .rm {
@@ -185,7 +218,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); bo
 }
 .chip input { display: none; }
 .chip:hover { border-color: var(--accent); }
-.chip.on { background: oklch(72% 0.16 255 / 0.18); border-color: var(--accent); color: var(--text); }
+.chip.on { background: rgb(225 20 20 / 0.10); border-color: var(--accent); color: var(--text); }
 .chip.on::before { content: "✓"; color: var(--accent); font-weight: 800; }
 .chip.disabled { opacity: 0.55; cursor: not-allowed; }
 
@@ -217,18 +250,32 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); bo
 .empty { text-align: center; color: var(--faint); padding: 56px 0; }
 .card {
   background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); overflow: hidden;
-  display: grid; grid-template-columns: 300px 1fr;
+  border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-card);
+  display: grid; grid-template-columns: 360px 1fr;
 }
 @media (max-width: 720px) { .card { grid-template-columns: 1fr; } }
-.media { background: var(--surface-2); display: grid; place-items: center; min-height: 190px; }
-.media img, .media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media { background: var(--surface-2); display: grid; place-items: center; min-height: 230px; padding: 10px; }
+/* Show the WHOLE generated card (no crop) so it can be reviewed at a glance. */
+.media img, .media video { width: 100%; height: 100%; max-height: 460px; object-fit: contain; display: block; }
+.media img.zoomable { cursor: zoom-in; }
 .media .nomedia { color: var(--faint); font-size: 0.84rem; padding: 26px; text-align: center; }
+
+/* ── Lightbox (full-size image viewer) ────────────────── */
+.lightbox {
+  position: fixed; inset: 0; z-index: 100; display: none; place-items: center;
+  padding: 24px; background: oklch(0% 0 0 / 0.86); cursor: zoom-out;
+  backdrop-filter: blur(4px);
+}
+.lightbox.show { display: grid; }
+.lightbox img {
+  max-width: 96vw; max-height: 94vh; object-fit: contain; border-radius: 10px;
+  box-shadow: 0 24px 70px oklch(0% 0 0 / 0.6);
+}
 .card .body { padding: 17px 19px; display: flex; flex-direction: column; gap: 12px; }
 .meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .badge-plat {
   font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em;
-  padding: 4px 9px; border-radius: 999px; background: var(--accent); color: oklch(20% 0.02 255);
+  padding: 4px 9px; border-radius: 999px; background: var(--accent); color: #fff;
 }
 .badge-status {
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; padding: 4px 9px; border-radius: 999px;

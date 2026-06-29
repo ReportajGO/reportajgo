@@ -39,7 +39,7 @@ function absoluteUrl(url: string): string {
 
 interface IngestResponse {
   duplicate?: boolean;
-  post?: { id?: string };
+  post?: { id?: string; language?: string };
   url?: string;
   error?: string;
 }
@@ -99,7 +99,15 @@ export class WebsitePublisher implements Publisher {
     }
 
     const id = data.post?.id ?? "unknown";
-    const url = data.url ? absoluteWebsite(env.WEBSITE_API_URL, data.url) : undefined;
+    // Build the public link from WEBSITE_PUBLIC_URL so it's clickable for readers
+    // even when ingest runs on a private/localhost host. On a duplicate the API
+    // omits `url`, so derive it from the existing post's id + language.
+    const relative =
+      data.url ??
+      (data.post?.id && data.post?.language
+        ? `/${data.post.language}/article/${data.post.id}`
+        : undefined);
+    const url = relative ? absoluteWebsite(env.WEBSITE_PUBLIC_URL, relative) : undefined;
     log.info({ id, duplicate: data.duplicate, category: payload.category }, "published to website");
     return { externalPostId: id, ...(url ? { url } : {}) };
   }

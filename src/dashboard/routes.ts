@@ -70,6 +70,19 @@ api.post("/drafts/:id/reject", async (req, res) => {
   }
 });
 
+// Instant publish: approve at "now" and immediately trigger a scan so the
+// scheduler picks it up and publishes right away (no waiting for the cron).
+api.post("/drafts/:id/publish-now", handle(async (req) => {
+  const { body, hashtags } = req.body ?? {};
+  await approveDraft(req.params.id ?? "", {
+    body,
+    hashtags,
+    scheduledAt: new Date().toISOString(),
+    approver: "dashboard:instant",
+  });
+  return scanNow();
+}));
+
 api.post("/drafts/:id/restore", handle((req) => restoreDraft(req.params.id ?? "")));
 
 api.post("/drafts/:id/reschedule", handle(async (req) => {

@@ -34,6 +34,13 @@ export interface PublishInput {
   media: PublishMedia[];
   /** Present when the draft carries article metadata (WEBSITE, etc.). */
   article?: PublishArticle;
+  /**
+   * Public URL of the already-published website article for this story. Social
+   * publishers (Telegram, etc.) append it so each post links back to the full
+   * write-up on the site. Undefined when WEBSITE isn't enabled or hasn't
+   * published yet.
+   */
+  articleUrl?: string;
 }
 
 export interface PublishResult {

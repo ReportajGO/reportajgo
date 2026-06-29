@@ -1,11 +1,34 @@
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import type { Platform } from "../domain/types.js";
-import { buildCaption, type Publisher, type PublishInput, type PublishResult } from "./publisher.js";
+import { type Publisher, type PublishInput, type PublishResult } from "./publisher.js";
 
 const log = logger.child({ module: "publish:meta" });
 
 const GRAPH = `https://graph.facebook.com/${env.META_GRAPH_VERSION}`;
+
+// Instagram captions allow up to 2200 chars. The full website article fits in
+// a single post (image + caption). No links — Instagram captions don't make
+// them clickable anyway.
+const META_CAPTION_CAP = 2200;
+
+/**
+ * Long, website-style Instagram/Facebook caption: headline + the full website
+ * article body + hashtags. One post, no links. Trimmed to Instagram's cap.
+ */
+export function buildMetaCaption(input: PublishInput): string {
+  const headline = input.article?.title?.trim();
+  const parts: string[] = [];
+
+  if (headline) parts.push(headline);
+  if (input.body.trim()) parts.push(input.body.trim());
+  const tags = input.hashtags.map((h) => `#${h.replace(/^#/, "").trim()}`).filter((t) => t.length > 1);
+  if (tags.length) parts.push(tags.join(" "));
+
+  let caption = parts.join("\n\n");
+  if (caption.length > META_CAPTION_CAP) caption = `${caption.slice(0, META_CAPTION_CAP - 1)}…`;
+  return caption;
+}
 
 /** POST to a Graph endpoint with form params; throws on API error. */
 async function graphPost(path: string, params: Record<string, string>): Promise<any> {
@@ -35,7 +58,7 @@ export class InstagramPublisher implements Publisher {
 
     const container = await graphPost(`${igId}/media`, {
       image_url: image.url,
-      caption: buildCaption(input),
+      caption: buildMetaCaption(input),
     });
     const published = await graphPost(`${igId}/media_publish`, {
       creation_id: container.id,
@@ -52,7 +75,7 @@ export class FacebookPublisher implements Publisher {
   async publish(input: PublishInput): Promise<PublishResult> {
     const pageId = env.META_FB_PAGE_ID;
     if (!pageId) throw new Error("META_FB_PAGE_ID is not set");
-    const caption = buildCaption(input);
+    const caption = buildMetaCaption(input);
     const image = input.media.find((m) => m.type === "IMAGE");
 
     if (image) {

@@ -26,10 +26,16 @@ export const PLATFORM_PROFILES: Record<Platform, PlatformProfile> = {
     platform: "TELEGRAM",
     styleId: "telegram-narrative",
     styleGuidance:
-      "Long-form narrative for a regional news channel. Lead with a strong hook, " +
-      "give 2-4 short paragraphs of context, use tasteful emoji as section markers, " +
-      "end with the source attribution. Conversational but credible.",
-    maxChars: 1024, // Telegram caption limit when sending with media
+      "News-channel post for a regional Telegram audience. Do NOT repeat the " +
+      "headline (it's shown above the post). Open with one strong sentence of " +
+      "context, then a single emoji-led section header (e.g. '⚙️ Asosiy " +
+      "tafsilotlar:') followed by 2-4 short lines, each starting with a brief " +
+      "label and an em-dash (e.g. 'Ishtirokchilar — ...'). Close with one " +
+      "forward-looking sentence. Tasteful emoji only. Do not add links, a " +
+      "footer, or a sign-off — those are added automatically.",
+    // Cap below Telegram's 1024 so the flag+headline, hashtags, social footer and
+    // the website link always fit alongside the body.
+    maxChars: 680,
     hashtagCount: 3,
     media: { type: "IMAGE", aspectRatio: "16:9" },
     mediaRequired: false,
