@@ -1,4 +1,4 @@
-import { CAT_COLOR, CAT_WORD, type CategorySlug } from "@/lib/constants";
+import { colorFor, wordFor, type CategorySlug } from "@/lib/constants";
 
 function shade(hex: string, p: number) {
   const n = parseInt(hex.slice(1), 16);
@@ -24,7 +24,7 @@ export default function Cover({
   variant?: "lead" | "card" | "thumb";
   className?: string;
 }) {
-  const c = CAT_COLOR[category];
+  const c = colorFor(category);
   const grad = `linear-gradient(135deg, ${c} 0%, ${shade(c, -32)} 100%)`;
   const word =
     variant === "lead"
@@ -49,7 +49,7 @@ export default function Cover({
           aria-hidden
           className={`pointer-events-none absolute -bottom-4 -right-1.5 font-display font-black uppercase leading-[.8] tracking-[-.04em] text-white/[.16] ${word}`}
         >
-          {CAT_WORD[category]}
+          {wordFor(category)}
         </span>
       )}
       {variant !== "thumb" && (

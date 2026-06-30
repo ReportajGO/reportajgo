@@ -57,7 +57,14 @@
   "search": {
     "results": "So‘rov bo‘yicha natijalar",
     "empty": "Hech narsa topilmadi",
-    "emptySub": "Boshqa so‘rov bilan urinib ko‘ring."
+    "emptySub": "Boshqa so‘rov bilan urinib ko‘ring.",
+    "suggestionsLabel": "Takliflar",
+    "sectionsLabel": "Bo‘limlar",
+    "articlesLabel": "Maqolalar",
+    "trendingLabel": "Hozir mashhur",
+    "seeAllFor": "“{q}” bo‘yicha barcha natijalar",
+    "didYouMean": "Balki {term}?",
+    "didYouMeanLink": "Balki <link>{term}</link>?"
   },
   "footer": {
     "tagline": "Dunyo yangiliklari — shovqinsiz. Tez, aniq, uch tilda.",
@@ -84,6 +91,50 @@
     "loginTitle": "Tahririyat uchun kirish",
     "loginError": "Pochta yoki parol noto‘g‘ri",
     "backToSite": "Saytga",
+    "clear": {
+      "button": "Hamma kontentni tozalash",
+      "restore": "Tiklash {count}",
+      "liveLabel": "{count} faol",
+      "clearedLabel": "{count} tozalangan",
+      "confirmTitle": "Hamma kontent tozalansinmi?",
+      "confirmBody": "Saytdagi barcha {count} ta faol maqola olib tashlanadi. Hech narsa butunlay o‘chirilmaydi — istalgan vaqtda tiklash mumkin.",
+      "confirmPrompt": "Tasdiqlash uchun CLEAR deb yozing",
+      "confirm": "Hammasini tozalash",
+      "cancel": "Bekor qilish",
+      "working": "Bajarilmoqda…",
+      "restoreConfirm": "Barcha {count} ta tozalangan maqola tiklansinmi?",
+      "badge": "Tozalangan"
+    },
+    "nav": {
+      "dashboard": "Boshqaruv",
+      "newPost": "Yangi maqola",
+      "sections": "Bo‘limlar",
+      "settings": "Sozlamalar",
+      "menu": "Menyu"
+    },
+    "stats": {
+      "total": "Jami",
+      "live": "Faol",
+      "cleared": "Tozalangan",
+      "sections": "Bo‘limlar"
+    },
+    "settingsPage": {
+      "title": "Sozlamalar",
+      "maintenance": "Kontent xizmati",
+      "maintenanceDesc": "Saytdagi barcha faol maqolalarni tozalang yoki tozalanganlarni tiklang. Tozalash qaytariladi — hech narsa butunlay o‘chirilmaydi.",
+      "sectionsNote": "Bo‘limlar agentdagi mavzu filtrlaridan avtomatik shakllanadi. Bo‘limlarni o‘zgartirish uchun agentda filtr qo‘shing yoki olib tashlang."
+    },
+    "sectionsPage": {
+      "title": "Bo‘limlar",
+      "desc": "Yangilik bo‘limlari agent filtrlaridan shakllanadi. Har biri tegishli yangiliklarni avtomatik ko‘rsatadi.",
+      "name": "Nomi",
+      "slug": "Slug",
+      "articles": "Maqolalar",
+      "status": "Holati",
+      "active": "Faol",
+      "hidden": "Yashirin",
+      "empty": "Hozircha bo‘lim yo‘q — agentda filtr qo‘shing."
+    },
     "upload": {
       "hint": "Rasmni shu yerga tashlang yoki tanlash uchun bosing",
       "hintSub": "PNG, JPG, WEBP, GIF — 5 MB gacha",

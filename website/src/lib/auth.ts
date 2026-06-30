@@ -73,7 +73,6 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        // @ts-expect-error custom field
         token.role = user.role;
       }
       return token;

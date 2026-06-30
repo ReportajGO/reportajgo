@@ -21,11 +21,24 @@ model User {
   posts     Post[]
 }
 
-// News sections: world, economics, sport, culture, tech.
+// News sections (themes). Driven by the agent's topic filters: each topic the
+// operator adds becomes a Category here (synced via POST /api/agent/themes).
 model Category {
   id    String @id @default(cuid())
   slug  String @unique
-  posts Post[]
+  // Localized display names as JSON: { "uz": "...", "ru": "...", "en": "..." }.
+  // Falls back to the slug when a locale is missing.
+  labels String?
+  // Optional brand styling for cover tiles; deterministic fallback when null.
+  color  String?
+  word   String?
+  // Nav ordering (mirrors the agent's topic order) and visibility. Removing a
+  // topic filter sets active=false so the theme drops out of the nav.
+  order  Int     @default(100)
+  active Boolean @default(true)
+  posts  Post[]
+
+  @@index([active, order])
 }
 
 // A single-language news article.
@@ -55,6 +68,9 @@ model Post {
   sourceUrl String? // original article URL
   // Idempotency key (the agent's content hash) so retries don't double-post.
   dedupeKey String? @unique
+  // Soft-delete: when set, the post is "cleared" — hidden everywhere public but
+  // recoverable via admin Restore. Admin clear wins (the agent never un-clears).
+  clearedAt DateTime?
 
   category   Category @relation(fields: [categoryId], references: [id])
   categoryId String

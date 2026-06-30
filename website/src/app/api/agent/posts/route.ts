@@ -123,8 +123,11 @@ export async function POST(req: Request) {
       { error: "Missing required field: imageUrl (every post must have a photo)" },
       { status: 400 },
     );
+  // Themes are dynamic now: any non-empty slug is accepted and created on the
+  // fly if the theme sync hasn't reached us yet (connectOrCreate below).
   if (!isCategory(category))
-    return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+    return NextResponse.json({ error: "Missing/invalid category slug" }, { status: 400 });
+  const categorySlug = String(category).trim().toLowerCase();
   if (!locales.includes(language))
     return NextResponse.json({ error: "Invalid language" }, { status: 400 });
 
@@ -167,7 +170,7 @@ export async function POST(req: Request) {
       sourceUrl: sourceUrl || null,
       dedupeKey: dedupeKey || null,
       category: {
-        connectOrCreate: { where: { slug: category }, create: { slug: category } },
+        connectOrCreate: { where: { slug: categorySlug }, create: { slug: categorySlug } },
       },
     },
     include: { category: true },

@@ -1,5 +1,4 @@
 import { useTranslations } from "next-intl";
-import type { CategorySlug } from "@/lib/constants";
 import { relativeTime } from "@/lib/time";
 
 /** Compact "1.2k" style number formatting for view counts. */
@@ -11,17 +10,16 @@ function formatCount(n: number): string {
 
 /** Category pill · timestamp · optional read-time / views, for cards & readers. */
 export default function Meta({
-  category,
+  categoryName,
   createdAt,
   readMin,
   views,
 }: {
-  category: CategorySlug;
+  categoryName: string;
   createdAt: string;
   readMin?: number;
   views?: number;
 }) {
-  const tNav = useTranslations("nav");
   const tTime = useTranslations("time");
   const tArticle = useTranslations("article");
 
@@ -32,7 +30,7 @@ export default function Meta({
   return (
     <div className="flex items-center gap-2 font-mono text-[11px] text-ink-soft">
       <span className="font-display text-[11px] font-extrabold uppercase tracking-[.07em] text-brand-red">
-        {tNav(category)}
+        {categoryName}
       </span>
       <span className="h-[3px] w-[3px] rounded-full bg-ink-soft" />
       <span>{when}</span>

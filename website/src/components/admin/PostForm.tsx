@@ -6,6 +6,8 @@ import { useRouter } from "@/i18n/navigation";
 import { CATEGORIES, ASPECTS, ASPECT_CSS, type AspectRatio } from "@/lib/constants";
 import { locales } from "@/i18n/routing";
 
+export type ThemeOption = { slug: string; name: string };
+
 export type PostFormData = {
   id?: string;
   title: string;
@@ -44,12 +46,25 @@ const inputCls =
 const labelCls =
   "mb-1.5 block font-display text-xs font-bold uppercase tracking-wide text-ink-soft";
 
-export default function PostForm({ initial }: { initial?: PostFormData }) {
+export default function PostForm({
+  initial,
+  themes = [],
+}: {
+  initial?: PostFormData;
+  themes?: ThemeOption[];
+}) {
   const t = useTranslations("admin");
-  const tNav = useTranslations("nav");
   const router = useRouter();
 
-  const [form, setForm] = useState<PostFormData>(initial ?? empty);
+  // Category options come from the live themes (agent topic filters); fall back
+  // to the legacy slugs only if no themes have synced yet.
+  const categoryOptions: ThemeOption[] =
+    themes.length > 0 ? themes : CATEGORIES.map((c) => ({ slug: c, name: c }));
+  const defaultCategory = categoryOptions[0]?.slug ?? "world";
+
+  const [form, setForm] = useState<PostFormData>(
+    initial ?? { ...empty, category: defaultCategory },
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -228,9 +243,9 @@ export default function PostForm({ initial }: { initial?: PostFormData }) {
             value={form.category}
             onChange={(e) => set("category", e.target.value)}
           >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {tNav(c)}
+            {categoryOptions.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.name}
               </option>
             ))}
           </select>

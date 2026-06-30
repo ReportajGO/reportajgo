@@ -1,27 +1,18 @@
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
+import { themeSlug } from "../domain/themes.js";
 import type { Platform } from "../domain/types.js";
 import type { Publisher, PublishInput, PublishResult } from "./publisher.js";
 
 const log = logger.child({ module: "publish:website" });
 
-// Site categories accepted by POST /api/agent/posts.
-type SiteCategory = "world" | "economics" | "sport" | "culture" | "tech";
+// Fallback theme slug when an article carries no matched topic.
+const DEFAULT_THEME = "news";
 
-// Keyword → category. First match wins; falls back to "world".
-const CATEGORY_RULES: { category: SiteCategory; pattern: RegExp }[] = [
-  { category: "tech", pattern: /\b(tech|technolog|ai|software|gadget|startup|science|space|cyber)\b/i },
-  { category: "economics", pattern: /\b(econom|business|market|finance|financial|trade|money|bank|stock|inflation|currency|crypto)\b/i },
-  { category: "sport", pattern: /\b(sport|football|soccer|olympic|match|tournament|league|cricket|tennis|nba|fifa)\b/i },
-  { category: "culture", pattern: /\b(culture|art|music|film|movie|entertain|celebrit|fashion|festival|book|heritage)\b/i },
-];
-
-function mapCategory(...hints: (string | undefined)[]): SiteCategory {
-  const hay = hints.filter(Boolean).join(" ");
-  for (const rule of CATEGORY_RULES) {
-    if (rule.pattern.test(hay)) return rule.category;
-  }
-  return "world";
+/** The theme slug an article belongs to (its matched topic filter). */
+function articleTheme(topic: string | undefined): string {
+  const t = (topic ?? "").trim();
+  return t ? themeSlug(t) : DEFAULT_THEME;
 }
 
 // The site only renders uz/ru/en; default anything else to en.
@@ -75,7 +66,7 @@ export class WebsitePublisher implements Publisher {
       title: a.title,
       excerpt: a.excerpt,
       content: input.body,
-      category: mapCategory(a.topic, a.title, a.excerpt),
+      category: articleTheme(a.topic),
       language: mapLanguage(a.language),
       imageUrl: absoluteUrl(image.url),
       source: a.source,

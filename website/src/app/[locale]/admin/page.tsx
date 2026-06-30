@@ -1,6 +1,7 @@
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { getAllPostsAdmin } from "@/lib/posts";
+import { getAllPostsAdmin, getContentCounts } from "@/lib/posts";
+import { getActiveThemes } from "@/lib/themes";
 import { relativeTime } from "@/lib/time";
 import DeleteButton from "@/components/admin/DeleteButton";
 
@@ -14,10 +15,11 @@ export default async function AdminDashboard({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const [posts, t, tNav, tTime] = await Promise.all([
+  const [posts, counts, themes, t, tTime] = await Promise.all([
     getAllPostsAdmin(),
+    getContentCounts(),
+    getActiveThemes(locale),
     getTranslations("admin"),
-    getTranslations("nav"),
     getTranslations("time"),
   ]);
 
@@ -27,12 +29,18 @@ export default async function AdminDashboard({
     return { post: p, when };
   });
 
+  const stats = [
+    { label: t("stats.total"), value: posts.length },
+    { label: t("stats.live"), value: counts.live },
+    { label: t("stats.cleared"), value: counts.cleared },
+    { label: t("stats.sections"), value: themes.length },
+  ];
+
   return (
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-display text-2xl font-extrabold tracking-tight">
-          {t("dashboard")}{" "}
-          <span className="text-ink-soft">· {posts.length}</span>
+          {t("dashboard")}
         </h1>
         <Link
           href="/admin/new"
@@ -40,6 +48,20 @@ export default async function AdminDashboard({
         >
           + {t("newPost")}
         </Link>
+      </div>
+
+      {/* Stat cards */}
+      <div className="mb-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-2xl border border-line bg-surface p-4">
+            <div className="font-display text-3xl font-extrabold tracking-tight text-ink">
+              {s.value}
+            </div>
+            <div className="mt-0.5 font-display text-xs font-bold uppercase tracking-wide text-ink-soft">
+              {s.label}
+            </div>
+          </div>
+        ))}
       </div>
 
       {posts.length === 0 ? (
@@ -61,12 +83,17 @@ export default async function AdminDashboard({
                       BR
                     </span>
                   )}
-                  <span className="line-clamp-2 flex-1 font-display font-semibold">
+                  {p.cleared && (
+                    <span className="mt-0.5 shrink-0 rounded bg-ink-soft/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-ink-soft">
+                      {t("clear.badge")}
+                    </span>
+                  )}
+                  <span className={`line-clamp-2 flex-1 font-display font-semibold ${p.cleared ? "text-ink-soft line-through" : ""}`}>
                     {p.title}
                   </span>
                 </div>
                 <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-display text-xs text-ink-soft">
-                  <span>{tNav(p.category)}</span>
+                  <span>{p.categoryName}</span>
                   <span aria-hidden>·</span>
                   <span className="uppercase">{p.language}</span>
                   <span aria-hidden>·</span>
@@ -101,16 +128,21 @@ export default async function AdminDashboard({
                 {rows.map(({ post: p, when }) => (
                   <tr key={p.id} className="border-b border-line last:border-0">
                     <td className="max-w-xs px-4 py-3">
-                      <span className="line-clamp-1 font-semibold">
+                      <span className={`line-clamp-1 font-semibold ${p.cleared ? "text-ink-soft line-through" : ""}`}>
                         {p.breaking && (
                           <span className="mr-1.5 rounded bg-brand-red px-1.5 py-0.5 text-[10px] font-bold text-white">
                             BR
                           </span>
                         )}
+                        {p.cleared && (
+                          <span className="mr-1.5 rounded bg-ink-soft/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-ink-soft no-underline">
+                            {t("clear.badge")}
+                          </span>
+                        )}
                         {p.title}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-ink-soft">{tNav(p.category)}</td>
+                    <td className="px-4 py-3 text-ink-soft">{p.categoryName}</td>
                     <td className="px-4 py-3 uppercase text-ink-soft">
                       {p.language}
                     </td>

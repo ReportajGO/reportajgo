@@ -24,7 +24,7 @@ export default function NewsCard({ post }: { post: PostDTO }) {
       </p>
       <div className="mt-auto">
         <Meta
-          category={post.category}
+          categoryName={post.categoryName}
           createdAt={post.createdAt}
           views={post.views}
         />

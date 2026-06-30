@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
-import { getPostsByCategory } from "@/lib/posts";
-import { isCategory } from "@/lib/constants";
+import { getPosts } from "@/lib/posts";
+import { getThemeBySlug } from "@/lib/themes";
+import { postsForTheme } from "@/lib/search";
 import LeadStory from "@/components/LeadStory";
 import SideItem from "@/components/SideItem";
 import NewsCard from "@/components/NewsCard";
@@ -15,16 +16,20 @@ export default async function CategoryPage({
   params: Promise<{ locale: string; category: string }>;
 }) {
   const { locale, category } = await params;
-  if (!isCategory(category)) notFound();
   setRequestLocale(locale);
 
-  const [posts, tNav, tHome] = await Promise.all([
-    getPostsByCategory(locale, category),
+  const theme = await getThemeBySlug(category, locale);
+  if (!theme) notFound();
+
+  const [allPosts, tNav, tHome] = await Promise.all([
+    getPosts(locale),
     getTranslations("nav"),
     getTranslations("home"),
   ]);
 
-  const name = tNav(category);
+  // Every article related to this filter (assigned + relevance-matched).
+  const posts = postsForTheme(allPosts, theme);
+  const name = theme.name;
 
   return (
     <div className="pb-4">

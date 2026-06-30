@@ -57,7 +57,14 @@
   "search": {
     "results": "Results for",
     "empty": "Nothing found",
-    "emptySub": "Try a different search."
+    "emptySub": "Try a different search.",
+    "suggestionsLabel": "Suggestions",
+    "sectionsLabel": "Sections",
+    "articlesLabel": "Articles",
+    "trendingLabel": "Trending now",
+    "seeAllFor": "See all results for “{q}”",
+    "didYouMean": "Did you mean {term}?",
+    "didYouMeanLink": "Did you mean <link>{term}</link>?"
   },
   "footer": {
     "tagline": "World news without the noise. Fast, clear, in three languages.",
@@ -84,6 +91,50 @@
     "loginTitle": "Editorial sign in",
     "loginError": "Invalid email or password",
     "backToSite": "Back to site",
+    "clear": {
+      "button": "Clear all content",
+      "restore": "Restore {count}",
+      "liveLabel": "{count} live",
+      "clearedLabel": "{count} cleared",
+      "confirmTitle": "Clear all content?",
+      "confirmBody": "This removes all {count} live articles from the site. Nothing is permanently deleted — you can restore them anytime.",
+      "confirmPrompt": "Type CLEAR to confirm",
+      "confirm": "Clear everything",
+      "cancel": "Cancel",
+      "working": "Working…",
+      "restoreConfirm": "Restore all {count} cleared articles?",
+      "badge": "Cleared"
+    },
+    "nav": {
+      "dashboard": "Dashboard",
+      "newPost": "New post",
+      "sections": "Sections",
+      "settings": "Settings",
+      "menu": "Menu"
+    },
+    "stats": {
+      "total": "Total posts",
+      "live": "Live",
+      "cleared": "Cleared",
+      "sections": "Sections"
+    },
+    "settingsPage": {
+      "title": "Settings",
+      "maintenance": "Content maintenance",
+      "maintenanceDesc": "Clear all live articles from the public site, or restore everything you cleared. Clearing is reversible — nothing is permanently deleted.",
+      "sectionsNote": "Sections are managed automatically from the agent's topic filters. Add or remove a filter in the agent to change the sections shown on the site."
+    },
+    "sectionsPage": {
+      "title": "Sections",
+      "desc": "News sections come from the agent's topic filters. Each one automatically shows related news.",
+      "name": "Name",
+      "slug": "Slug",
+      "articles": "Articles",
+      "status": "Status",
+      "active": "Active",
+      "hidden": "Hidden",
+      "empty": "No sections yet — add a topic filter in the agent."
+    },
     "upload": {
       "hint": "Drag & drop a photo here, or click to choose",
       "hintSub": "PNG, JPG, WEBP, GIF — up to 5 MB",

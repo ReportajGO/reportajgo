@@ -12,14 +12,17 @@ import { prisma } from "./db/client.js";
 import { startDashboard } from "./dashboard/server.js";
 import { registerRepeatableJobs } from "./queue/schedule.js";
 import { startWorkers } from "./queue/workers.js";
+import { syncThemesToWebsite } from "./publish/themes.js";
 
 async function bootstrap() {
   logger.info("ReportajGO agent starting");
-  await initSettings(); // warm the runtime-config cache before anything reads it
+  const config = await initSettings(); // warm the runtime-config cache before anything reads it
   const server = startDashboard();
   const workers = startWorkers();
   const approvalBot = startApprovalBot();
   await registerRepeatableJobs();
+  // Make sure the website's themes reflect the current topic filters at startup.
+  void syncThemesToWebsite(config.researchTopics);
   logger.info("agent ready");
 
   const shutdown = async (signal: string) => {

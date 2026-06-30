@@ -17,7 +17,7 @@ export default function SideItem({ post }: { post: PostDTO }) {
           {emoji && <span className="mr-1.5 text-[0.85em]">{emoji}</span>}
           {titleText}
         </h3>
-        <Meta category={post.category} createdAt={post.createdAt} />
+        <Meta categoryName={post.categoryName} createdAt={post.createdAt} />
       </div>
       <Cover
         category={post.category}

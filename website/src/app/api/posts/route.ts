@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   if (!category || !isCategory(category))
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
-  if (!language || !locales.includes(language))
+  if (!language || !(locales as readonly string[]).includes(language))
     return NextResponse.json({ error: "Invalid language" }, { status: 400 });
 
   const author = await prisma.user.findUnique({

@@ -170,6 +170,98 @@ async function translateOne(src: Tr, sl: string, tl: string): Promise<Tr> {
   }
 }
 
+// ── Professional theme/section labels ────────────────────────────────────────
+type Labels = { uz: string; ru: string; en: string };
+
+const LABEL_PROMPT = (raw: string) =>
+  `You are naming a section on a professional news website. An editor typed a ` +
+  `raw topic that may be sloppy, lowercase, mistyped, abbreviated, or in any ` +
+  `language. Turn it into a clean, professional news-section title — concise ` +
+  `(1–3 words), Title Case, no quotes, no trailing punctuation, no emoji — in ` +
+  `three languages: Uzbek (Latin script), Russian, and English. Keep proper ` +
+  `nouns (countries, leagues, brands) correct. ` +
+  `Return ONLY JSON: {"uz":"…","ru":"…","en":"…"}. Raw topic: ${JSON.stringify(raw)}`;
+
+async function geminiLabels(raw: string, model: string): Promise<Labels> {
+  const key = process.env.GEMINI_API_KEY!;
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: LABEL_PROMPT(raw) }] }],
+      generationConfig: { temperature: 0.2 },
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`gemini ${res.status}`);
+  const data = await res.json();
+  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  const p = JSON.parse(json);
+  const clean = (s: unknown) => String(s ?? "").trim();
+  return { uz: clean(p.uz), ru: clean(p.ru), en: clean(p.en) };
+}
+
+/**
+ * Produce a professional, localized section title (UZ/RU/EN) from whatever the
+ * operator typed as a topic filter. Prefers Gemini (cleans + translates in one
+ * shot); falls back to literal translation, then to the raw name as-is.
+ */
+export async function themeLabels(
+  raw: string,
+  sourceLang: string,
+): Promise<Record<string, string>> {
+  const name = raw.trim();
+  if (process.env.GEMINI_API_KEY) {
+    const primary = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    for (const model of [primary, "gemini-2.5-flash-lite"]) {
+      try {
+        const g = await geminiLabels(name, model);
+        if (g.uz && g.ru && g.en) return { uz: g.uz, ru: g.ru, en: g.en };
+      } catch (e) {
+        console.error(`[translate] theme labels via ${model} failed:`, e);
+      }
+    }
+  }
+  // Fallback: literal machine translation, then identity.
+  try {
+    return await translateText(name, sourceLang);
+  } catch {
+    const out: Record<string, string> = {};
+    for (const loc of ALL) out[loc] = name;
+    return out;
+  }
+}
+
+/**
+ * Translate a SHORT label (e.g. a theme/section name) into every site language.
+ * Uses literal machine translation (keyless Google) rather than the article
+ * prompt — short inputs make the LLM "translate an article" prompt hallucinate a
+ * whole story, so we keep labels literal. Identity fallback on failure.
+ */
+export async function translateText(
+  text: string,
+  sourceLang: string,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = { [sourceLang]: text };
+  const targets = ALL.filter((l) => l !== sourceLang);
+  const results = await Promise.all(
+    targets.map(async (t) => {
+      try {
+        const r = (await googleText(text, sourceLang, t)).trim();
+        return r || text;
+      } catch (e) {
+        console.error(`[translate] label ${sourceLang}->${t} failed:`, e);
+        return text; // identity fallback — show the source label
+      }
+    }),
+  );
+  targets.forEach((t, i) => (out[t] = results[i]));
+  return out;
+}
+
 /**
  * Produce translations for all site languages from a single source.
  * The source language is stored verbatim; the others are translated.

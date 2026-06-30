@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { recordView, getRelatedPosts } from "@/lib/posts";
-import { CAT_WORD } from "@/lib/constants";
+import { wordFor } from "@/lib/constants";
 import { splitLeadingEmoji } from "@/lib/title";
 import Cover from "@/components/Cover";
 import Meta from "@/components/Meta";
@@ -22,7 +22,7 @@ export default async function ArticlePage({
 
   // Count this read and render with the fresh view total.
   const post = await recordView(id, locale);
-  if (!post || !post.published) notFound();
+  if (!post || !post.published || post.cleared) notFound();
 
   const t = await getTranslations("article");
 
@@ -59,7 +59,7 @@ export default async function ArticlePage({
       <article className="mx-auto max-w-[760px] py-6 sm:py-9">
         <div className="mb-3">
           <Meta
-            category={post.category}
+            categoryName={post.categoryName}
             createdAt={post.createdAt}
             readMin={readMin}
             views={post.views}
@@ -82,7 +82,7 @@ export default async function ArticlePage({
           className={`mb-3 ${coverClass}`}
         />
         <p className="mb-6 font-mono text-xs text-ink-soft">
-          ReportajGO · {CAT_WORD[post.category]}
+          ReportajGO · {wordFor(post.category)}
         </p>
 
         <div className="mb-6 flex items-center gap-3 border-y border-line py-3.5">

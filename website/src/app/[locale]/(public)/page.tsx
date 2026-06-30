@@ -1,7 +1,8 @@
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getPosts } from "@/lib/posts";
-import { CATEGORIES } from "@/lib/constants";
+import { getActiveThemes } from "@/lib/themes";
+import { postsForTheme } from "@/lib/search";
 import LeadStory from "@/components/LeadStory";
 import SideItem from "@/components/SideItem";
 import NewsCard from "@/components/NewsCard";
@@ -17,10 +18,10 @@ export default async function HomePage({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const [posts, tHome, tNav] = await Promise.all([
+  const [posts, themes, tHome] = await Promise.all([
     getPosts(locale),
+    getActiveThemes(locale),
     getTranslations("home"),
-    getTranslations("nav"),
   ]);
 
   if (posts.length === 0) {
@@ -77,22 +78,23 @@ export default async function HomePage({
         ))}
       </div>
 
-      {/* Category bands */}
-      {CATEGORIES.map((cat) => {
-        const items = posts.filter((p) => p.category === cat).slice(0, 4);
+      {/* Theme bands (one per active topic filter) — each shows news related to
+          the filter, not just the articles primarily assigned to it. */}
+      {themes.map((theme) => {
+        const items = postsForTheme(posts, theme).slice(0, 4);
         if (items.length === 0) return null;
         return (
           <section
-            key={cat}
+            key={theme.slug}
             className="-mx-[22px] mt-12 border-y border-line bg-bg-sub px-[22px] pb-10 pt-2"
           >
             <div className="mx-auto max-w-page">
               <div className="mb-4 mt-6 flex items-center justify-between">
                 <h2 className="font-display text-[22px] font-extrabold tracking-tight">
-                  {tNav(cat)}
+                  {theme.name}
                 </h2>
                 <Link
-                  href={`/${cat}`}
+                  href={`/${theme.slug}`}
                   className="font-display text-xs font-extrabold uppercase tracking-[.14em] text-brand-red"
                 >
                   {tHome("seeAll")}

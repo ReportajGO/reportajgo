@@ -45,7 +45,7 @@ export async function PUT(req: Request, { params }: Ctx) {
 
   if (category && !isCategory(category))
     return NextResponse.json({ error: "Invalid category" }, { status: 400 });
-  if (language && !locales.includes(language))
+  if (language && !(locales as readonly string[]).includes(language))
     return NextResponse.json({ error: "Invalid language" }, { status: 400 });
 
   // imageUrl === undefined → keep existing; otherwise it's a new upload URL or

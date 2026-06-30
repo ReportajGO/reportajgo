@@ -2,7 +2,7 @@ import { prisma } from "./prisma";
 import type { CategorySlug } from "./constants";
 import type { Translations } from "./translate";
 
-// Shape consumed by the UI (category flattened to its slug).
+// Shape consumed by the UI (category flattened to its slug + localized name).
 export type PostDTO = {
   id: string;
   title: string;
@@ -11,8 +11,10 @@ export type PostDTO = {
   imageUrl: string | null;
   language: string;
   category: CategorySlug;
+  categoryName: string; // localized theme label (falls back to the slug)
   breaking: boolean;
   published: boolean;
+  cleared: boolean; // soft-deleted via admin "Clear" (recoverable)
   views: number;
   aspect: string;
   gallery: string[];
@@ -33,10 +35,24 @@ type WithCategoryAuthor = {
   views: number;
   aspect: string;
   gallery: string | null;
+  clearedAt: Date | null;
   createdAt: Date;
-  category: { slug: string };
+  category: { slug: string; labels: string | null };
   author: { name: string | null } | null;
 };
+
+/** Localized theme label from a Category.labels JSON blob (slug fallback). */
+function labelFor(labels: string | null, slug: string, locale?: string): string {
+  if (labels && locale) {
+    try {
+      const map = JSON.parse(labels) as Record<string, string>;
+      if (map?.[locale]) return map[locale];
+    } catch {
+      /* fall through to slug */
+    }
+  }
+  return slug;
+}
 
 function parseTranslations(raw: string | null): Translations | null {
   if (!raw) return null;
@@ -61,9 +77,11 @@ function toDTO(p: WithCategoryAuthor, locale?: string): PostDTO {
     body: tr?.body || p.body,
     imageUrl: p.imageUrl,
     language: p.language,
-    category: p.category.slug as CategorySlug,
+    category: p.category.slug,
+    categoryName: labelFor(p.category.labels, p.category.slug, locale),
     breaking: p.breaking,
     published: p.published,
+    cleared: p.clearedAt != null,
     views: p.views,
     aspect: p.aspect,
     gallery: parseGallery(p.gallery),
@@ -87,7 +105,7 @@ const include = { category: true, author: true } as const;
 /** All approved posts, newest first, rendered in `locale`. */
 export async function getPosts(locale: string): Promise<PostDTO[]> {
   const rows = await prisma.post.findMany({
-    where: { published: true },
+    where: { published: true, clearedAt: null },
     include,
     orderBy: { createdAt: "desc" },
   });
@@ -97,11 +115,12 @@ export async function getPosts(locale: string): Promise<PostDTO[]> {
 /** Approved posts within a single category, rendered in `locale`. */
 export async function getPostsByCategory(
   locale: string,
-  category: CategorySlug,
+  category: string,
 ): Promise<PostDTO[]> {
   const rows = await prisma.post.findMany({
     where: {
       published: true,
+      clearedAt: null,
       category: { slug: category },
     },
     include,
@@ -148,7 +167,7 @@ export async function getRelatedPosts(
   limit = 4,
 ): Promise<PostDTO[]> {
   const rows = await prisma.post.findMany({
-    where: { published: true, id: { not: post.id } },
+    where: { published: true, clearedAt: null, id: { not: post.id } },
     include,
     orderBy: { createdAt: "desc" },
     take: 60,
@@ -166,4 +185,16 @@ export async function getAllPostsAdmin(): Promise<PostDTO[]> {
     orderBy: { createdAt: "desc" },
   });
   return rows.map((r) => toDTO(r));
+}
+
+/** Live vs cleared (soft-deleted) post counts for the admin Clear/Restore UI. */
+export async function getContentCounts(): Promise<{
+  live: number;
+  cleared: number;
+}> {
+  const [live, cleared] = await Promise.all([
+    prisma.post.count({ where: { clearedAt: null } }),
+    prisma.post.count({ where: { clearedAt: { not: null } } }),
+  ]);
+  return { live, cleared };
 }

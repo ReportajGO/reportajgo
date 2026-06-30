@@ -1,11 +1,12 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import { NAV_ORDER } from "@/lib/constants";
 import Logo from "./Logo";
 import LangSwitcher from "./LangSwitcher";
 import SocialLinks from "./SocialLinks";
 
-export default function Footer() {
+type NavTheme = { slug: string; name: string };
+
+export default function Footer({ themes }: { themes: NavTheme[] }) {
   const t = useTranslations();
 
   return (
@@ -27,13 +28,19 @@ export default function Footer() {
             <h4 className="mb-3 font-display text-[13px] font-extrabold uppercase tracking-[.08em] opacity-60">
               {t("footer.sections")}
             </h4>
-            {NAV_ORDER.map((key) => (
+            <Link
+              href="/"
+              className="block py-[5px] font-display text-sm opacity-85 hover:text-brand-red hover:opacity-100"
+            >
+              {t("nav.home")}
+            </Link>
+            {themes.map((theme) => (
               <Link
-                key={key}
-                href={key === "home" ? "/" : `/${key}`}
+                key={theme.slug}
+                href={`/${theme.slug}`}
                 className="block py-[5px] font-display text-sm opacity-85 hover:text-brand-red hover:opacity-100"
               >
-                {t(`nav.${key}`)}
+                {theme.name}
               </Link>
             ))}
           </div>

@@ -6,6 +6,7 @@ import {
   reRegisterResearchCron,
   resumeResearchCron,
 } from "../queue/schedule.js";
+import { syncThemesToWebsite } from "../publish/themes.js";
 import {
   approveDraft,
   listPendingDrafts,
@@ -113,6 +114,11 @@ api.put("/settings", handle(async (req) => {
   // A changed cron only matters while auto-research is active; resume/re-register
   // keeps the repeatable job pointed at the new pattern.
   if (changedCron) await reRegisterResearchCron(config.researchCron);
+  // Topic filters drive the website's theme pages: sync them so adding/removing
+  // a filter makes the matching theme appear/disappear on the site immediately.
+  if (req.body && typeof req.body === "object" && "researchTopics" in req.body) {
+    void syncThemesToWebsite(config.researchTopics);
+  }
   return config;
 }));
 

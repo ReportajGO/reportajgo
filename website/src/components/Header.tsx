@@ -3,14 +3,15 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import { NAV_ORDER } from "@/lib/constants";
 import Logo from "./Logo";
 import SearchBox from "./SearchBox";
 import LangSwitcher from "./LangSwitcher";
 import ThemeToggle from "./ThemeToggle";
 import SocialLinks from "./SocialLinks";
 
-export default function Header() {
+type NavTheme = { slug: string; name: string };
+
+export default function Header({ themes }: { themes: NavTheme[] }) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
 
@@ -52,14 +53,21 @@ export default function Header() {
         <div className="border-t border-line bg-bg px-[22px] py-3 md:hidden">
           <SearchBox className="mb-3" />
           <div className="flex flex-col">
-            {NAV_ORDER.map((key) => (
+            <Link
+              href="/"
+              onClick={() => setOpen(false)}
+              className="border-b border-line py-2.5 font-display font-bold text-ink"
+            >
+              {t("nav.home")}
+            </Link>
+            {themes.map((theme) => (
               <Link
-                key={key}
-                href={key === "home" ? "/" : `/${key}`}
+                key={theme.slug}
+                href={`/${theme.slug}`}
                 onClick={() => setOpen(false)}
                 className="border-b border-line py-2.5 font-display font-bold text-ink"
               >
-                {t(`nav.${key}`)}
+                {theme.name}
               </Link>
             ))}
           </div>

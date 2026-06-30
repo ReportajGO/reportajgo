@@ -26,7 +26,7 @@ export default async function LeadStory({ post }: { post: PostDTO }) {
         )}
       </div>
       <div className="mb-2">
-        <Meta category={post.category} createdAt={post.createdAt} />
+        <Meta categoryName={post.categoryName} createdAt={post.createdAt} />
       </div>
       <h1 className="mb-2 font-serif text-[24px] font-bold leading-[1.13] tracking-tight transition-colors group-hover:text-brand-red sm:mb-2.5 sm:text-[32px] sm:leading-[1.1] lg:text-[40px] lg:leading-[1.08]">
         {emoji && (
