@@ -17,6 +17,7 @@ import {
 import {
   getStatus,
   listPostsByStatus,
+  publishAllPending,
   retryFailed,
   runPipelineNow,
   scanNow,
@@ -97,6 +98,8 @@ api.get("/status", handle(() => getStatus()));
 
 api.post("/pipeline/run", handle(() => runPipelineNow()));
 api.post("/scheduler/scan", handle(() => scanNow()));
+// Publish every pending-approval draft at once (no per-item review).
+api.post("/publish/all", handle(() => publishAllPending("dashboard:all")));
 api.post("/queues/:name/retry-failed", handle((req) => retryFailed(req.params.name ?? "")));
 
 api.post("/cron/pause", handle(async () => {

@@ -20,6 +20,7 @@ const I18N = {
     appTitle: "· Control Panel", systemStatus: "System status",
     pipelineControls: "Pipeline controls",
     runPipeline: "▶ Run pipeline now", scanNow: "⟳ Scan due posts",
+    publishAll: "🚀 Publish all pending",
     pauseCron: "⏸ Pause auto-research", resumeCron: "▶ Resume auto-research",
     retryPipeline: "↻ Retry failed (pipeline)", retryPublish: "↻ Retry failed (publish)",
     refresh: "⟲ Refresh",
@@ -51,6 +52,7 @@ const I18N = {
     scheduledAt: "Scheduled:", publishedAt: "Published:", postId: "Post id:", reason: "Reason:", errorWord: "Error:",
     t_settingsSaved: "Settings saved & applied", t_pipelineQueued: "Pipeline run queued",
     t_scanQueued: "Scan queued", t_autoPaused: "Auto-research paused", t_autoResumed: "Auto-research resumed",
+    t_publishAllNone: "Nothing pending to publish", t_publishAllDone: "Publishing {n} story(ies) now",
     t_retriedPipe: "pipeline job(s) retried", t_retriedPub: "publish job(s) retried",
     t_formReset: "Form reset", t_addOneTopic: "Add at least one topic",
     t_selectLang: "Select at least one language", t_enablePlatform: "Enable at least one platform",
@@ -65,6 +67,7 @@ const I18N = {
     appTitle: "· Boshqaruv paneli", systemStatus: "Tizim holati",
     pipelineControls: "Konveyer boshqaruvi",
     runPipeline: "▶ Hozir ishga tushirish", scanNow: "⟳ Navbatdagilarni tekshirish",
+    publishAll: "🚀 Barchasini chop etish",
     pauseCron: "⏸ Avto-izlanishni to‘xtatish", resumeCron: "▶ Avto-izlanishni davom ettirish",
     retryPipeline: "↻ Qayta urinish (konveyer)", retryPublish: "↻ Qayta urinish (e’lon)",
     refresh: "⟲ Yangilash",
@@ -96,6 +99,7 @@ const I18N = {
     scheduledAt: "Rejada:", publishedAt: "E’lon qilingan:", postId: "Post id:", reason: "Sabab:", errorWord: "Xato:",
     t_settingsSaved: "Sozlamalar saqlandi", t_pipelineQueued: "Konveyer navbatga qo‘yildi",
     t_scanQueued: "Tekshiruv navbatga qo‘yildi", t_autoPaused: "Avto-izlanish to‘xtatildi", t_autoResumed: "Avto-izlanish davom etdi",
+    t_publishAllNone: "Chop etish uchun hech narsa yo‘q", t_publishAllDone: "{n} ta yangilik chop etilmoqda",
     t_retriedPipe: "konveyer ishi qayta urinildi", t_retriedPub: "e’lon ishi qayta urinildi",
     t_formReset: "Forma tozalandi", t_addOneTopic: "Kamida bitta mavzu qo‘shing",
     t_selectLang: "Kamida bitta tilni tanlang", t_enablePlatform: "Kamida bitta platformani yoqing",
@@ -110,6 +114,7 @@ const I18N = {
     appTitle: "· Панель управления", systemStatus: "Состояние системы",
     pipelineControls: "Управление конвейером",
     runPipeline: "▶ Запустить сейчас", scanNow: "⟳ Проверить очередь",
+    publishAll: "🚀 Опубликовать все",
     pauseCron: "⏸ Остановить авто-поиск", resumeCron: "▶ Возобновить авто-поиск",
     retryPipeline: "↻ Повторить (конвейер)", retryPublish: "↻ Повторить (публикация)",
     refresh: "⟲ Обновить",
@@ -141,6 +146,7 @@ const I18N = {
     scheduledAt: "Запланировано:", publishedAt: "Опубликовано:", postId: "ID поста:", reason: "Причина:", errorWord: "Ошибка:",
     t_settingsSaved: "Настройки сохранены", t_pipelineQueued: "Конвейер поставлен в очередь",
     t_scanQueued: "Проверка поставлена в очередь", t_autoPaused: "Авто-поиск остановлен", t_autoResumed: "Авто-поиск возобновлён",
+    t_publishAllNone: "Нечего публиковать", t_publishAllDone: "Публикуется новостей: {n}",
     t_retriedPipe: "задач конвейера повторено", t_retriedPub: "задач публикации повторено",
     t_formReset: "Форма сброшена", t_addOneTopic: "Добавьте хотя бы одну тему",
     t_selectLang: "Выберите хотя бы один язык", t_enablePlatform: "Включите хотя бы одну платформу",
@@ -645,6 +651,14 @@ function bind() {
     withBusy(e.target, async () => {
       await api("/pipeline/run", { method: "POST" });
       toast(t("t_pipelineQueued"));
+      setTimeout(loadStatus, 1200);
+    }),
+  );
+  el("publish-all").addEventListener("click", (e) =>
+    withBusy(e.target, async () => {
+      const r = await api("/publish/all", { method: "POST" });
+      const n = r?.items ?? 0;
+      toast(n === 0 ? t("t_publishAllNone") : t("t_publishAllDone").replace("{n}", n));
       setTimeout(loadStatus, 1200);
     }),
   );

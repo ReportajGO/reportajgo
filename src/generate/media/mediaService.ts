@@ -170,12 +170,17 @@ async function renderCanvaCard(bg: Buffer, headline: string): Promise<Buffer> {
  * PENDING_APPROVAL (or FAILED). For video platforms we first generate a key
  * image, then animate it (Higgsfield DoP is image-to-video).
  */
-export async function generateMediaForPendingDrafts(): Promise<{
+export async function generateMediaForPendingDrafts(opts?: {
+  newsItemId?: string;
+}): Promise<{
   ready: number;
   failed: number;
 }> {
   const drafts = await prisma.postDraft.findMany({
-    where: { status: "PENDING_MEDIA" },
+    where: {
+      status: "PENDING_MEDIA",
+      ...(opts?.newsItemId ? { newsItemId: opts.newsItemId } : {}),
+    },
     include: { newsItem: true },
   });
 

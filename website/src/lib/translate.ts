@@ -182,26 +182,41 @@ const LABEL_PROMPT = (raw: string) =>
   `nouns (countries, leagues, brands) correct. ` +
   `Return ONLY JSON: {"uz":"…","ru":"…","en":"…"}. Raw topic: ${JSON.stringify(raw)}`;
 
+// Transient statuses worth retrying (Gemini "high demand" 503, rate limit, gateways).
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function geminiLabels(raw: string, model: string): Promise<Labels> {
   const key = process.env.GEMINI_API_KEY!;
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: LABEL_PROMPT(raw) }] }],
-      generationConfig: { temperature: 0.2 },
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!res.ok) throw new Error(`gemini ${res.status}`);
-  const data = await res.json();
-  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
-  const p = JSON.parse(json);
-  const clean = (s: unknown) => String(s ?? "").trim();
-  return { uz: clean(p.uz), ru: clean(p.ru), en: clean(p.en) };
+
+  // Retry transient 5xx/429 a few times — these blips are common and usually
+  // clear within a second or two, so they shouldn't surface as a hard error.
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: LABEL_PROMPT(raw) }] }],
+        generationConfig: { temperature: 0.2 },
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+      const p = JSON.parse(json);
+      const clean = (s: unknown) => String(s ?? "").trim();
+      return { uz: clean(p.uz), ru: clean(p.ru), en: clean(p.en) };
+    }
+    lastStatus = res.status;
+    if (!RETRYABLE_STATUS.has(res.status)) break;
+    await sleep(800 * (attempt + 1));
+  }
+  throw new Error(`gemini ${lastStatus}`);
 }
 
 /**
@@ -221,7 +236,9 @@ export async function themeLabels(
         const g = await geminiLabels(name, model);
         if (g.uz && g.ru && g.en) return { uz: g.uz, ru: g.ru, en: g.en };
       } catch (e) {
-        console.error(`[translate] theme labels via ${model} failed:`, e);
+        // Transient (e.g. Gemini 503 high-demand) — we fall back to the next
+        // model / literal translation, so this is a warning, not an error.
+        console.warn(`[translate] theme labels via ${model} unavailable, falling back:`, e instanceof Error ? e.message : e);
       }
     }
   }

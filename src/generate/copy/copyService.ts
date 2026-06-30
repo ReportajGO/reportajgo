@@ -81,6 +81,64 @@ export async function generateCopy(
 }
 
 /**
+ * Create PENDING_MEDIA drafts for ONE news item across the given platforms,
+ * sharing a single themed card headline. Returns how many drafts were created.
+ */
+async function createDraftsForItem(
+  news: SourceNews,
+  language: string,
+  platforms: string[],
+): Promise<number> {
+  let created = 0;
+  // One themed card headline (in the post language) shared across this item's
+  // platform drafts.
+  let headline: string | null = null;
+  try {
+    headline = await generateCardHeadline(news, language);
+  } catch (err) {
+    log.warn({ err, newsId: news.id }, "card headline generation failed; will fall back to title");
+  }
+  for (const platform of platforms) {
+    try {
+      const copy = await generateCopy(news, platform as Platform, language);
+      await prisma.postDraft.create({
+        data: {
+          newsItemId: news.id,
+          platform: copy.platform,
+          language: copy.language,
+          style: copy.style,
+          headline,
+          body: copy.body,
+          hashtags: copy.hashtags,
+          status: "PENDING_MEDIA",
+        },
+      });
+      created++;
+    } catch (err) {
+      log.error({ err, newsId: news.id, platform }, "copy generation failed");
+    }
+  }
+  return created;
+}
+
+/**
+ * Draft ONE news item (operator-driven / instant flow) across all enabled
+ * platforms in the primary content language. Marks the item DRAFTED on success.
+ */
+export async function draftNewsItem(newsId: string): Promise<{ drafts: number }> {
+  const { contentLanguages, enabledPlatforms } = await getRuntimeConfig();
+  const news = await prisma.newsItem.findUnique({ where: { id: newsId } });
+  if (!news) throw new Error("news item not found");
+  const language = contentLanguages[0] ?? "en";
+  const drafts = await createDraftsForItem(news, language, enabledPlatforms);
+  if (drafts > 0) {
+    await prisma.newsItem.update({ where: { id: newsId }, data: { status: "DRAFTED" } });
+  }
+  log.info({ newsId, drafts }, "single item drafted");
+  return { drafts };
+}
+
+/**
  * Create PostDrafts for every SELECTED news item across all enabled platforms,
  * using the primary content language. Marks the news item DRAFTED.
  */
@@ -108,36 +166,8 @@ export async function draftSelectedItems(): Promise<{ drafts: number }> {
   let drafts = 0;
 
   for (const news of selected) {
-    let createdForItem = 0;
-    // One themed card headline (in the post language) shared across this item's
-    // platform drafts.
-    let headline: string | null = null;
-    try {
-      headline = await generateCardHeadline(news, language);
-    } catch (err) {
-      log.warn({ err, newsId: news.id }, "card headline generation failed; will fall back to title");
-    }
-    for (const platform of enabledPlatforms) {
-      try {
-        const copy = await generateCopy(news, platform as Platform, language);
-        await prisma.postDraft.create({
-          data: {
-            newsItemId: news.id,
-            platform: copy.platform,
-            language: copy.language,
-            style: copy.style,
-            headline,
-            body: copy.body,
-            hashtags: copy.hashtags,
-            status: "PENDING_MEDIA",
-          },
-        });
-        drafts++;
-        createdForItem++;
-      } catch (err) {
-        log.error({ err, newsId: news.id, platform }, "copy generation failed");
-      }
-    }
+    const createdForItem = await createDraftsForItem(news, language, enabledPlatforms);
+    drafts += createdForItem;
     // Only advance the item if at least one platform draft was created;
     // otherwise leave it SELECTED so a later run can retry (e.g. after a
     // transient quota/outage error clears).

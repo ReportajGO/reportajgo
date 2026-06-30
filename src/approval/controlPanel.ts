@@ -6,7 +6,7 @@ import {
   updateRuntimeConfig,
   VALID_PLATFORMS,
 } from "../config/settingsStore.js";
-import { getStatus, runPipelineNow } from "../dashboard/controlService.js";
+import { getStatus, publishAllPending, runPipelineNow } from "../dashboard/controlService.js";
 import {
   isResearchCronActive,
   pauseResearchCron,
@@ -68,6 +68,7 @@ export async function mainMenu(): Promise<{ text: string; markup: ReturnType<typ
     [Markup.button.callback("📱 Platforms", "cp:platforms"), Markup.button.callback("📊 Status", "cp:status")],
     [Markup.button.callback(active ? "⏸️ Pause auto-research" : "▶️ Resume auto-research", "cp:togglecron")],
     [Markup.button.callback("🔥 Run pipeline now", "cp:run")],
+    [Markup.button.callback("🚀 Publish all pending", "cp:publishall")],
   ]);
   return { text, markup };
 }
@@ -247,6 +248,22 @@ export function registerControlPanel(bot: Telegraf): void {
       const { jobId } = await runPipelineNow();
       await ctx.answerCbQuery("Pipeline started 🔥").catch(() => {});
       await ctx.reply(`🔥 Research run queued (job ${jobId}). New posts will arrive here for approval.`);
+    } catch (err) {
+      await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true }).catch(() => {});
+    }
+  });
+
+  // Publish everything pending at once (skip per-item approval)
+  bot.action("cp:publishall", async (ctx) => {
+    try {
+      await ctx.answerCbQuery("Publishing all… 🚀").catch(() => {});
+      const { items, skipped } = await publishAllPending(`tg:${ctx.from?.id ?? "unknown"}:all`);
+      const msg =
+        items === 0
+          ? "ℹ️ Nothing pending to publish."
+          : `🚀 Publishing <b>${items}</b> pending stor${items === 1 ? "y" : "ies"} across all platforms now.` +
+            (skipped > 0 ? `\n⚠️ ${skipped} draft(s) skipped (no ready image yet).` : "");
+      await ctx.reply(msg, { parse_mode: "HTML" });
     } catch (err) {
       await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true }).catch(() => {});
     }

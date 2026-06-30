@@ -12,6 +12,7 @@ interface RawNews {
   sourceUrl?: string;
   sourceName?: string;
   language?: string;
+  topic?: string;
   publishedAt?: string;
 }
 
@@ -40,6 +41,42 @@ function buildPrompt(topic: string, languages: string[], hours: number): string 
     ``,
     `Posts will be written in: ${langList}. Pick globally newsworthy stories that travel across borders.`,
   ].join("\n");
+}
+
+/** Prompt to read ONE specific article URL and extract its content. */
+function buildUrlPrompt(url: string): string {
+  return [
+    `You are a news editor. Read the SPECIFIC news article at this exact URL and extract its content:`,
+    url,
+    `Use Google Search to open and read that exact page. Base EVERYTHING strictly on that`,
+    `article's real content — do NOT invent facts, numbers, names, or quotes. If you cannot`,
+    `access the article, return {"title":""}.`,
+    ``,
+    `Return ONLY JSON (no prose):`,
+    `{`,
+    `  "title": string,        // the article's factual headline`,
+    `  "summary": string,      // 3-4 sentence neutral summary of the actual article`,
+    `  "sourceUrl": string,    // the article URL`,
+    `  "sourceName": string,   // the publisher name`,
+    `  "language": string,     // the article's language code (e.g. "en","ru","uz")`,
+    `  "topic": string,        // a short news category, e.g. "World","Business","Technology","Sports","Politics"`,
+    `  "publishedAt": string   // ISO 8601 if known, else ""`,
+    `}`,
+  ].join("\n");
+}
+
+/**
+ * Extract a single news article from a specific URL into a normalized candidate.
+ * Used by the operator-driven "send a link → instant post" flow.
+ */
+export async function researchUrl(url: string): Promise<ResearchedNews> {
+  log.info({ url }, "researching single url");
+  const { data } = await groundedJson<RawNews | RawNews[]>(buildUrlPrompt(url));
+  const r = Array.isArray(data) ? data[0] : data;
+  if (!r || !r.title?.trim() || !r.summary?.trim()) {
+    throw new Error("could not read the article at that link");
+  }
+  return normalize({ ...r, sourceUrl: r.sourceUrl?.trim() || url }, r.topic?.trim() || "World");
 }
 
 /** Research one topic and return normalized candidates. */

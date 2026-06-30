@@ -36,6 +36,10 @@ website/public/uploads/*
 /.canva-profile/
 /.canva-debug/
 
+# Instagram web automation (login session + debug dumps)
+/.instagram-profile/
+/.instagram-debug/
+
 # Throwaway POC / debug runner scripts (may contain inline tokens)
 /_run*.mts
 /_*.mts

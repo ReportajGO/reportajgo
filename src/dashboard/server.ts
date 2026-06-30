@@ -18,6 +18,11 @@ export function startDashboard(): Server {
   // Generated media is public (it's published on the website and to social
   // platforms anyway) so the site can load image URLs without credentials.
   app.use("/media", express.static(MEDIA_ROOT));
+  // Brand favicon is public (not sensitive) so the tab icon shows on the login
+  // page too — served before the auth gate.
+  const publicDir = join(__dirname, "public");
+  app.get("/favicon.ico", (_req, res) => res.sendFile(join(publicDir, "favicon.ico")));
+  app.get("/icon.png", (_req, res) => res.sendFile(join(publicDir, "icon.png")));
   // Strict login gate for the UI + API. No-op if DASHBOARD_PASSWORD is unset.
   app.use(dashboardAuth());
   app.use("/api", api);

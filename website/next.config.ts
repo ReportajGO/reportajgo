@@ -1,7 +1,14 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
+// This repo has two package-lock.json files (agent at the root, website nested),
+// so Next.js can't infer the file-tracing root. Pin it to the website dir to
+// silence the "inferred your workspace root" dev warning.
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 // Hardening headers applied to every response.
 const securityHeaders = [
@@ -42,6 +49,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Pin file-tracing root to this dir (two lockfiles exist in the repo).
+  outputFileTracingRoot: projectRoot,
   // Hide the Next.js dev tools indicator (the "N" badge) during development.
   devIndicators: false,
   poweredByHeader: false, // hide "X-Powered-By: Next.js"

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getAllPostsAdmin, getContentCounts } from "@/lib/posts";
@@ -69,101 +70,70 @@ export default async function AdminDashboard({
           {t("noPosts")}
         </div>
       ) : (
-        <>
-          {/* Mobile: card list (the table doesn't fit narrow phone widths) */}
-          <ul className="space-y-3 sm:hidden">
-            {rows.map(({ post: p, when }) => (
-              <li
-                key={p.id}
-                className="rounded-xl border border-line bg-surface p-4"
-              >
-                <div className="mb-2 flex items-start gap-2">
-                  {p.breaking && (
-                    <span className="mt-0.5 shrink-0 rounded bg-brand-red px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      BR
-                    </span>
-                  )}
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {rows.map(({ post: p, when }) => (
+            <li
+              key={p.id}
+              className="flex gap-3 rounded-xl border border-line bg-surface p-3"
+            >
+              {/* Small thumbnail */}
+              <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-bg-sub">
+                {p.imageUrl ? (
+                  <Image
+                    src={p.imageUrl}
+                    alt=""
+                    fill
+                    sizes="96px"
+                    className={`object-cover ${p.cleared ? "opacity-50 grayscale" : ""}`}
+                  />
+                ) : (
+                  <div className="grid h-full w-full place-items-center text-ink-soft/50">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="9" cy="9" r="2" />
+                      <path d="m21 15-3.5-3.5L9 20" />
+                    </svg>
+                  </div>
+                )}
+                {p.breaking && (
+                  <span className="absolute left-1 top-1 rounded bg-brand-red px-1 py-0.5 text-[9px] font-bold leading-none text-white">
+                    BR
+                  </span>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex items-start gap-1.5">
                   {p.cleared && (
                     <span className="mt-0.5 shrink-0 rounded bg-ink-soft/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-ink-soft">
                       {t("clear.badge")}
                     </span>
                   )}
-                  <span className={`line-clamp-2 flex-1 font-display font-semibold ${p.cleared ? "text-ink-soft line-through" : ""}`}>
+                  <span className={`line-clamp-2 font-display text-sm font-semibold leading-snug ${p.cleared ? "text-ink-soft line-through" : "text-ink"}`}>
                     {p.title}
                   </span>
                 </div>
-                <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-display text-xs text-ink-soft">
+                <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-display text-xs text-ink-soft">
                   <span>{p.categoryName}</span>
                   <span aria-hidden>·</span>
                   <span className="uppercase">{p.language}</span>
                   <span aria-hidden>·</span>
                   <span>{when}</span>
                 </div>
-                <div className="flex items-center gap-5 border-t border-line pt-3">
+                <div className="mt-auto flex items-center gap-4 pt-2">
                   <Link
                     href={`/admin/${p.id}/edit`}
-                    className="font-display text-sm font-bold text-brand-red hover:underline"
+                    className="font-display text-xs font-bold text-brand-red hover:underline"
                   >
                     {t("actions.edit")}
                   </Link>
                   <DeleteButton id={p.id} />
                 </div>
-              </li>
-            ))}
-          </ul>
-
-          {/* Desktop: table */}
-          <div className="hidden overflow-hidden rounded-2xl border border-line bg-surface sm:block">
-            <table className="w-full text-left font-display text-sm">
-              <thead className="border-b border-line bg-bg-sub text-xs uppercase tracking-wide text-ink-soft">
-                <tr>
-                  <th className="px-4 py-3">{t("table.title")}</th>
-                  <th className="px-4 py-3">{t("table.category")}</th>
-                  <th className="px-4 py-3">{t("table.lang")}</th>
-                  <th className="px-4 py-3">{t("table.date")}</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ post: p, when }) => (
-                  <tr key={p.id} className="border-b border-line last:border-0">
-                    <td className="max-w-xs px-4 py-3">
-                      <span className={`line-clamp-1 font-semibold ${p.cleared ? "text-ink-soft line-through" : ""}`}>
-                        {p.breaking && (
-                          <span className="mr-1.5 rounded bg-brand-red px-1.5 py-0.5 text-[10px] font-bold text-white">
-                            BR
-                          </span>
-                        )}
-                        {p.cleared && (
-                          <span className="mr-1.5 rounded bg-ink-soft/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-ink-soft no-underline">
-                            {t("clear.badge")}
-                          </span>
-                        )}
-                        {p.title}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-ink-soft">{p.categoryName}</td>
-                    <td className="px-4 py-3 uppercase text-ink-soft">
-                      {p.language}
-                    </td>
-                    <td className="px-4 py-3 text-ink-soft">{when}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-3">
-                        <Link
-                          href={`/admin/${p.id}/edit`}
-                          className="font-bold text-brand-red hover:underline"
-                        >
-                          {t("actions.edit")}
-                        </Link>
-                        <DeleteButton id={p.id} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

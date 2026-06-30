@@ -6,6 +6,11 @@ import { prisma } from "../db/client.js";
 import { approveDraft, rejectDraft } from "../dashboard/approvalService.js";
 import { scanNow } from "../dashboard/controlService.js";
 import { MEDIA_ROOT } from "../generate/media/mediaStore.js";
+import {
+  getPublishState,
+  instantPostFromUrl,
+  type InstantStage,
+} from "../pipeline/instantPost.js";
 import { handleControlPanelText, mainMenu, registerControlPanel } from "./controlPanel.js";
 import { startWebApp } from "./webApp.js";
 
@@ -90,8 +95,18 @@ function keyboard(draftId: string) {
 async function sendApprovalMessage(chatId: number, draft: DraftForApproval): Promise<void> {
   if (!bot) return;
   const caption = buildCaption(draft);
+  // Prefer the Reel video so the approver reviews the actual clip before it
+  // posts; fall back to the image, then text-only.
+  const video = draft.media.find((m) => m.type === "VIDEO");
   const image = draft.media.find((m) => m.type === "IMAGE");
-  if (image) {
+  if (video) {
+    const path = localPathFor(video.url);
+    await bot.telegram.sendVideo(chatId, path ? { source: path } : video.url, {
+      caption,
+      parse_mode: "HTML",
+      reply_markup: keyboard(draft.id),
+    });
+  } else if (image) {
     const path = localPathFor(image.url);
     await bot.telegram.sendPhoto(chatId, path ? { source: path } : image.url, {
       caption,
@@ -121,18 +136,40 @@ async function sweep(): Promise<void> {
     take: 30,
   })) as unknown as (DraftForApproval & { newsItemId: string })[];
 
-  // One approval card per news item — prefer the TELEGRAM preview. Approving it
-  // cascades to the other platforms (e.g. the WEBSITE article) automatically.
+  // One approval card per news item — prefer the TELEGRAM preview for the
+  // headline/caption. Approving it cascades to the other platforms automatically.
   const byNews = new Map<string, (typeof drafts)[number]>();
+  // Merge media across ALL of an item's drafts so the card can show the Reel
+  // (on the Instagram draft) even though the TELEGRAM draft is the representative.
+  const mediaByNews = new Map<string, { type: string; url: string }[]>();
   for (const d of drafts) {
     const current = byNews.get(d.newsItemId);
     if (!current || (d.platform === "TELEGRAM" && current.platform !== "TELEGRAM")) {
       byNews.set(d.newsItemId, d);
     }
+    const acc = mediaByNews.get(d.newsItemId) ?? [];
+    acc.push(...d.media);
+    mediaByNews.set(d.newsItemId, acc);
   }
 
-  for (const draft of byNews.values()) {
-    if (draft.media.length === 0) continue; // media not ready yet
+  // Don't send a card while any of the item's drafts is still generating media
+  // (the Reel takes minutes) — otherwise we'd send an image-only card first and
+  // a second one once the video is ready.
+  const stillGenerating = new Set(
+    (
+      await prisma.postDraft.findMany({
+        where: { status: "PENDING_MEDIA", newsItemId: { in: [...byNews.keys()] } },
+        select: { newsItemId: true },
+      })
+    ).map((d) => d.newsItemId),
+  );
+
+  for (const rep of byNews.values()) {
+    if (stillGenerating.has(rep.newsItemId)) continue; // reel still rendering
+    const media = mediaByNews.get(rep.newsItemId) ?? [];
+    if (media.length === 0) continue; // media not ready yet
+    // Show the Reel (video) when the item has one; keep the rep's headline/text.
+    const draft = { ...rep, media };
     try {
       for (const chat of approvers) await sendApprovalMessage(chat, draft);
       // Silence the sibling cards for this news item — they're approved together.
@@ -144,6 +181,82 @@ async function sweep(): Promise<void> {
     } catch (err) {
       log.error({ err, draftId: draft.id }, "failed to send approval message");
     }
+  }
+}
+
+// ── instant post from a link ─────────────────────────────────────────────────
+const URL_RE = /https?:\/\/[^\s]+/i;
+const PUBLISH_TERMINAL = new Set(["PUBLISHED", "FAILED", "CANCELLED"]);
+const POLL_INTERVAL_MS = 3000;
+const POLL_MAX_ATTEMPTS = 20; // ~60s for website+social to publish
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+const STAGE_TEXT: Record<InstantStage, string> = {
+  reading: "📖 Reading the article…",
+  drafting: "✍️ Writing the posts in 3 languages…",
+  media: "🖼️ Generating the images…",
+  publishing: "🚀 Approving & publishing now…",
+};
+
+function firstUrl(text: string): string | undefined {
+  return text.match(URL_RE)?.[0];
+}
+
+/**
+ * Handle a pasted news link: build ready posts + images with the agent and
+ * publish them immediately (no approval step). Edits one status message as it
+ * progresses, then reports the per-platform result.
+ */
+async function handleInstantUrl(chatId: number, url: string, fromId: number | undefined): Promise<void> {
+  if (!bot) return;
+
+  // Only registered approvers may trigger an instant publish.
+  const approvers = await getApproverChats();
+  if (!approvers.includes(chatId)) {
+    await bot.telegram.sendMessage(chatId, "⛔️ You're not registered. Send /start first.");
+    return;
+  }
+
+  const status = await bot.telegram.sendMessage(chatId, "🔗 Link received. Starting…");
+  const setStatus = (text: string) =>
+    bot!.telegram.editMessageText(chatId, status.message_id, undefined, text).catch(() => {});
+
+  try {
+    const result = await instantPostFromUrl(url, {
+      approver: `tg:${fromId ?? "unknown"}:url`,
+      onProgress: (stage) => void setStatus(STAGE_TEXT[stage]),
+    });
+
+    // Poll until the publish jobs settle (website-first, then social).
+    let state = await getPublishState(result.newsItemId);
+    for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
+      if (state.length > 0 && state.every((s) => PUBLISH_TERMINAL.has(s.status))) break;
+      await sleep(POLL_INTERVAL_MS);
+      state = await getPublishState(result.newsItemId);
+    }
+
+    const published = state.filter((s) => s.status === "PUBLISHED").map((s) => s.platform);
+    const failed = state.filter((s) => s.status === "FAILED");
+    const pending = state.filter((s) => !PUBLISH_TERMINAL.has(s.status)).map((s) => s.platform);
+
+    const lines = [`<b>${escapeHtml(result.title)}</b>`, ""];
+    if (published.length) lines.push(`✅ Published: <b>${published.join(", ")}</b>`);
+    if (pending.length) lines.push(`⏳ Still publishing: ${pending.join(", ")}`);
+    if (failed.length) {
+      lines.push("", "⚠️ Failed:");
+      for (const f of failed) lines.push(`• ${f.platform}: ${escapeHtml(f.error ?? "unknown error")}`);
+    }
+    if (result.draftsFailed > 0) lines.push("", `⚠️ ${result.draftsFailed} platform(s) had no image generated.`);
+    if (!published.length && !pending.length && !failed.length) lines.push("Posts created and queued.");
+
+    await setStatus("✅ Done.");
+    await bot.telegram.sendMessage(chatId, lines.join("\n"), { parse_mode: "HTML" });
+    log.info({ url, newsItemId: result.newsItemId, published }, "instant url published");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "failed to process the link";
+    await setStatus(`❌ ${message}`);
+    log.error({ err, url }, "instant url failed");
   }
 }
 
@@ -164,7 +277,9 @@ export function startApprovalBot(): { stop: () => void } | undefined {
   bot.start(async (ctx) => {
     await addApproverChat(ctx.chat.id);
     await ctx.reply(
-      "✅ You're registered as a ReportajGO approver.\nI'll send each ready post here with Approve / Reject buttons.",
+      "✅ You're registered as a ReportajGO approver.\n" +
+        "• I'll send each auto-researched post here with Approve / Reject buttons.\n" +
+        "• Or just paste a news link and I'll build ready posts + images and publish them immediately — no approval needed.",
     );
     const { text, markup } = await mainMenu();
     await ctx.reply(text, { parse_mode: "HTML", ...markup });
@@ -177,10 +292,17 @@ export function startApprovalBot(): { stop: () => void } | undefined {
 
   bot.command("ping", (ctx) => ctx.reply("pong — approval bot is live."));
 
-  // Free-text routed to the control panel (custom cron / add topic).
+  // Free-text routing: first the control panel (custom cron / add topic), then
+  // a pasted news link → instant post, otherwise fall through.
   bot.on("text", async (ctx, next) => {
     const consumed = await handleControlPanelText(ctx).catch(() => false);
-    if (!consumed) await next();
+    if (consumed) return;
+    const url = firstUrl(ctx.message.text ?? "");
+    if (url) {
+      void handleInstantUrl(ctx.chat.id, url, ctx.from?.id);
+      return;
+    }
+    await next();
   });
 
   bot.action(/^ap:(.+)$/, async (ctx) => {

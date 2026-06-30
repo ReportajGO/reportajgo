@@ -48,6 +48,9 @@ export const PLATFORM_PROFILES: Record<Platform, PlatformProfile> = {
       "Friendly, scroll-stopping tone. Hashtags grouped at the end.",
     maxChars: 2200,
     hashtagCount: 8,
+    // Image feed post for now. The web publisher + approval flow already handle a
+    // VIDEO (Reel) when a draft carries one — switch this to VIDEO/9:16 once the
+    // reel-generation engine is wired (REST DoP + public media URL).
     media: { type: "IMAGE", aspectRatio: "4:5" },
     mediaRequired: true,
   },

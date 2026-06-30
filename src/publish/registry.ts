@@ -1,4 +1,6 @@
+import { env } from "../config/env.js";
 import type { Platform } from "../domain/types.js";
+import { InstagramWebPublisher } from "./instagramWeb/index.js";
 import { FacebookPublisher, InstagramPublisher } from "./meta.js";
 import { NotConfiguredPublisher } from "./notConfigured.js";
 import type { Publisher } from "./publisher.js";
@@ -11,7 +13,9 @@ const cache = new Map<Platform, Publisher>();
 
 const factories: Record<Platform, () => Publisher> = {
   TELEGRAM: () => new TelegramPublisher(),
-  INSTAGRAM: () => new InstagramPublisher(),
+  // Web automation (instagram.com) or the Meta Graph API, per INSTAGRAM_PUBLISHER.
+  INSTAGRAM: () =>
+    env.INSTAGRAM_PUBLISHER === "web" ? new InstagramWebPublisher() : new InstagramPublisher(),
   FACEBOOK: () => new FacebookPublisher(),
   YOUTUBE: () => new NotConfiguredPublisher("YOUTUBE"),
   WEBSITE: () => new WebsitePublisher(),

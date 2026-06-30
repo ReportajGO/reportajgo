@@ -148,6 +148,27 @@ const schema = z.object({
   META_FB_PAGE_ID: z.string().optional(),
   META_GRAPH_VERSION: z.string().default("v21.0"),
 
+  // How Instagram posts are published:
+  //  - "graph": official Meta Graph API (needs META_ACCESS_TOKEN + IG id).
+  //  - "web":   browser automation of instagram.com via a persistent logged-in
+  //             Chrome profile (like the Canva renderer). Run `npm run
+  //             instagram:login` once. No API/token needed. Brittle + against
+  //             Instagram ToS — use your own account at your own risk.
+  INSTAGRAM_PUBLISHER: z.enum(["graph", "web"]).default("graph"),
+  // Persistent Chromium profile holding the one-time Instagram login (gitignored).
+  INSTAGRAM_PROFILE_DIR: z.string().default(".instagram-profile"),
+  // Run the Instagram browser headless. Default false: a real headed window is
+  // far less likely to trip Instagram's automation checks.
+  INSTAGRAM_HEADLESS: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
+  // Browser channel ("chrome" = real Google Chrome, least detectable; empty =
+  // Playwright's bundled Chromium).
+  INSTAGRAM_BROWSER_CHANNEL: z.string().default("chrome"),
+  // Where screenshots/HTML are dumped when a posting step fails.
+  INSTAGRAM_DEBUG_DIR: z.string().default(".instagram-debug"),
+
   DASHBOARD_PORT: z.coerce.number().default(3000),
   APPROVERS: z.string().default(""),
 

@@ -4,6 +4,7 @@ import { getRuntimeConfig } from "../config/settingsStore.js";
 import { prisma } from "../db/client.js";
 import { pipelineQueue, publishQueue, schedulerQueue } from "../queue/queues.js";
 import { isResearchCronActive } from "../queue/schedule.js";
+import { approveDraft } from "./approvalService.js";
 import type { Queue } from "bullmq";
 
 const log = logger.child({ module: "control" });
@@ -80,7 +81,11 @@ function integrations() {
   return {
     gemini: { configured: Boolean(env.GEMINI_API_KEY), editable: false },
     telegram: {
-      configured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHANNEL_ID),
+      // The channel publisher reuses the approval-bot token when no dedicated
+      // TELEGRAM_BOT_TOKEN is set, so either token counts as configured.
+      configured: Boolean(
+        (env.TELEGRAM_BOT_TOKEN || env.TELEGRAM_APPROVAL_BOT_TOKEN) && env.TELEGRAM_CHANNEL_ID,
+      ),
       editable: false,
     },
     meta: {
@@ -134,6 +139,42 @@ export async function scanNow(): Promise<{ jobId?: string }> {
   const job = await schedulerQueue.add("scan-manual", {}, { removeOnComplete: true });
   log.info({ jobId: job.id }, "manual scan enqueued");
   return { jobId: job.id };
+}
+
+/**
+ * Publish everything at once: approve + schedule every draft awaiting approval
+ * (that has ready media) and trigger an immediate publish — no per-item review.
+ * One approval per news item, which cascades to its platform siblings.
+ */
+export async function publishAllPending(
+  approver = "publish-all",
+): Promise<{ items: number; drafts: number; skipped: number }> {
+  const pending = await prisma.postDraft.findMany({
+    where: { status: "PENDING_APPROVAL" },
+    select: {
+      id: true,
+      newsItemId: true,
+      media: { where: { status: "READY", url: { not: null } }, select: { id: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // One approvable draft (with ready media) per news item — approveDraft cascades
+  // to the item's other platform drafts automatically.
+  const byItem = new Map<string, string>();
+  for (const d of pending) {
+    if (d.media.length > 0 && !byItem.has(d.newsItemId)) byItem.set(d.newsItemId, d.id);
+  }
+
+  const now = new Date().toISOString();
+  for (const draftId of byItem.values()) {
+    await approveDraft(draftId, { scheduledAt: now, approver });
+  }
+  if (byItem.size > 0) await scanNow();
+
+  const skipped = pending.length - byItem.size;
+  log.info({ items: byItem.size, drafts: pending.length, skipped }, "publish-all triggered");
+  return { items: byItem.size, drafts: pending.length, skipped };
 }
 
 /** Retry every failed job on a queue. */
