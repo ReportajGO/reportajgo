@@ -9,7 +9,6 @@ const log = logger.child({ module: "settings" });
 export const VALID_PLATFORMS = [
   "TELEGRAM",
   "INSTAGRAM",
-  "FACEBOOK",
   "YOUTUBE",
   "WEBSITE",
 ] as const;
@@ -24,6 +23,8 @@ export interface RuntimeConfig {
   researchCron: string;
   researchMaxAgeHours: number;
   maxItemsPerRun: number;
+  /** Auto-approve + publish each ready story with no human approval step. */
+  autoPublish: boolean;
 }
 
 // One DB row holds the whole override blob as JSON under this key.
@@ -43,6 +44,7 @@ const updateSchema = z
     researchCron: nonEmptyStr,
     researchMaxAgeHours: z.coerce.number().int().positive().max(168),
     maxItemsPerRun: z.coerce.number().int().positive().max(50),
+    autoPublish: z.boolean(),
   })
   .partial()
   .strict();
@@ -59,6 +61,7 @@ function envDefaults(): RuntimeConfig {
     researchCron: env.RESEARCH_CRON,
     researchMaxAgeHours: env.RESEARCH_MAX_AGE_HOURS,
     maxItemsPerRun: env.MAX_ITEMS_PER_RUN,
+    autoPublish: env.AUTO_PUBLISH,
   };
 }
 
@@ -74,7 +77,15 @@ async function loadOverrides(): Promise<Partial<RuntimeConfig>> {
   const row = await prisma.setting.findUnique({ where: { key: SETTINGS_KEY } });
   if (!row) return {};
   try {
-    const parsed = updateSchema.parse(JSON.parse(row.value));
+    const raw = JSON.parse(row.value) as Record<string, unknown>;
+    // Drop any platforms no longer supported (e.g. a removed FACEBOOK) so one
+    // stale value can't invalidate the whole stored config.
+    if (Array.isArray(raw.enabledPlatforms)) {
+      const valid = (VALID_PLATFORMS as readonly string[]);
+      raw.enabledPlatforms = raw.enabledPlatforms.filter((p) => valid.includes(p as string));
+      if ((raw.enabledPlatforms as unknown[]).length === 0) delete raw.enabledPlatforms;
+    }
+    const parsed = updateSchema.parse(raw);
     return parsed as Partial<RuntimeConfig>;
   } catch (err) {
     log.warn({ err }, "stored settings invalid; ignoring overrides");
@@ -91,6 +102,7 @@ function merge(base: RuntimeConfig, over: Partial<RuntimeConfig>): RuntimeConfig
     researchCron: over.researchCron ?? base.researchCron,
     researchMaxAgeHours: over.researchMaxAgeHours ?? base.researchMaxAgeHours,
     maxItemsPerRun: over.maxItemsPerRun ?? base.maxItemsPerRun,
+    autoPublish: over.autoPublish ?? base.autoPublish,
   };
 }
 

@@ -1,5 +1,5 @@
 // ReportajGO control panel — talks to the /api JSON endpoints.
-const PLATFORMS = ["TELEGRAM", "INSTAGRAM", "FACEBOOK", "WEBSITE", "YOUTUBE"];
+const PLATFORMS = ["TELEGRAM", "INSTAGRAM", "WEBSITE", "YOUTUBE"];
 const LANGUAGES = [
   { code: "en", label: "English" },
   { code: "ru", label: "Russian" },
@@ -557,7 +557,9 @@ function readonlyCard(d) {
 
   const canRestore = d.status === "REJECTED" || d.status === "FAILED";
   const canReschedule = d.status === "SCHEDULED" || d.status === "FAILED";
+  const canPublishNow = d.status === "SCHEDULED" || d.status === "FAILED";
   const acts = [];
+  if (canPublishNow) acts.push(`<button class="primary sm f-publish-now">${t("publishNow")}</button>`);
   if (canRestore) acts.push(`<button class="ok sm f-restore">${t("restore")}</button>`);
   if (canReschedule) {
     acts.push(
@@ -582,6 +584,17 @@ function readonlyCard(d) {
       ${actionsHtml}
     </div>`;
 
+  const publishNowBtn = node.querySelector(".f-publish-now");
+  if (publishNowBtn) {
+    publishNowBtn.addEventListener("click", (e) =>
+      withBusy(e.target, async () => {
+        await api(`/drafts/${d.id}/publish-now`, { method: "POST" });
+        toast(t("t_publishing"));
+        node.remove();
+        loadStatus();
+      }),
+    );
+  }
   const restoreBtn = node.querySelector(".f-restore");
   if (restoreBtn) {
     restoreBtn.addEventListener("click", (e) =>

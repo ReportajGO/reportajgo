@@ -1,5 +1,7 @@
 import { Worker } from "bullmq";
 import { logger } from "../config/logger.js";
+import { getRuntimeConfig } from "../config/settingsStore.js";
+import { publishAllPending } from "../dashboard/controlService.js";
 import { generateMediaForPendingDrafts } from "../generate/media/mediaService.js";
 import { runResearchPipeline } from "../pipeline/researchPipeline.js";
 import { publishScheduledPost } from "../publish/publishService.js";
@@ -22,6 +24,14 @@ export function startWorkers(): Worker[] {
     async () => {
       const research = await runResearchPipeline();
       const media = await generateMediaForPendingDrafts();
+      // Auto-publish mode ("share itself"): approve + publish everything ready,
+      // no human approval step.
+      const { autoPublish } = await getRuntimeConfig();
+      if (autoPublish) {
+        const published = await publishAllPending("auto");
+        log.info({ items: published.items }, "auto-published ready stories");
+        return { ...research, ...media, autoPublished: published.items };
+      }
       return { ...research, ...media };
     },
     { connection },

@@ -63,6 +63,12 @@ const schema = z.object({
     .string()
     .default("CNN,BBC,Reuters,Associated Press,Al Jazeera,The Guardian,Bloomberg"),
   ENABLED_PLATFORMS: z.string().default("TELEGRAM"),
+  // When true, the pipeline auto-approves and publishes each ready story to all
+  // enabled platforms with no human approval step ("share itself"). Default off.
+  AUTO_PUBLISH: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
 
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHANNEL_ID: z.string().optional(),
@@ -200,7 +206,6 @@ const raw = parsed.data;
 const VALID_PLATFORMS = [
   "TELEGRAM",
   "INSTAGRAM",
-  "FACEBOOK",
   "YOUTUBE",
   "WEBSITE",
 ] as const;

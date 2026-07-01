@@ -54,17 +54,6 @@ export const PLATFORM_PROFILES: Record<Platform, PlatformProfile> = {
     media: { type: "IMAGE", aspectRatio: "4:5" },
     mediaRequired: true,
   },
-  FACEBOOK: {
-    platform: "FACEBOOK",
-    styleId: "facebook-conversational",
-    styleGuidance:
-      "Conversational community tone. Hook + clear summary + a question to drive " +
-      "engagement. Minimal hashtags.",
-    maxChars: 2000,
-    hashtagCount: 2,
-    media: { type: "IMAGE", aspectRatio: "1:1" },
-    mediaRequired: false,
-  },
   WEBSITE: {
     platform: "WEBSITE",
     styleId: "website-article",

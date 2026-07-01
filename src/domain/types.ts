@@ -5,7 +5,6 @@
 export type Platform =
   | "TELEGRAM"
   | "INSTAGRAM"
-  | "FACEBOOK"
   | "YOUTUBE"
   | "WEBSITE";
 

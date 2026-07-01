@@ -185,6 +185,17 @@
       "lang": "Язык",
       "date": "Дата",
       "status": "Статус"
+    },
+    "filter": {
+      "search": "Поиск постов…",
+      "allSections": "Все разделы",
+      "allLangs": "Все языки",
+      "allStatus": "Все статусы",
+      "live": "Активные",
+      "cleared": "Очищенные",
+      "results": "{n} из {total}",
+      "noMatches": "Нет постов по фильтрам",
+      "reset": "Сбросить"
     }
   }
 }

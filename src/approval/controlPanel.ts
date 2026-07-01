@@ -58,6 +58,7 @@ export async function mainMenu(): Promise<{ text: string; markup: ReturnType<typ
   const text =
     `🤖 <b>ReportajGO — Control Panel</b>\n\n` +
     `Auto-research: <b>${active ? `ON · ${cfg.researchCron}` : "PAUSED"}</b>\n` +
+    `Auto-publish: <b>${cfg.autoPublish ? "ON — posts itself, no approval" : "OFF — approve first"}</b>\n` +
     `Limit: <b>${cfg.maxItemsPerRun}/run</b> · Freshness: <b>${cfg.researchMaxAgeHours}h</b>\n` +
     `Model: <b>${cfg.geminiModel}</b>\n` +
     `Languages: <b>${cfg.contentLanguages.join(", ")}</b>`;
@@ -67,6 +68,7 @@ export async function mainMenu(): Promise<{ text: string; markup: ReturnType<typ
     [Markup.button.callback("📁 Topics", "cp:topics"), Markup.button.callback("🌐 Languages", "cp:langs")],
     [Markup.button.callback("📱 Platforms", "cp:platforms"), Markup.button.callback("📊 Status", "cp:status")],
     [Markup.button.callback(active ? "⏸️ Pause auto-research" : "▶️ Resume auto-research", "cp:togglecron")],
+    [Markup.button.callback(cfg.autoPublish ? "🤖 Auto-publish: ON" : "🤖 Auto-publish: OFF", "cp:toggleauto")],
     [Markup.button.callback("🔥 Run pipeline now", "cp:run")],
     [Markup.button.callback("🚀 Publish all pending", "cp:publishall")],
   ]);
@@ -231,6 +233,15 @@ export function registerControlPanel(bot: Telegraf): void {
   bot.action("cp:status", async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
     await safeEdit(ctx, await statusText(), Markup.inlineKeyboard([backRow()]));
+  });
+
+  // Auto-publish toggle (share itself — no approval)
+  bot.action("cp:toggleauto", async (ctx) => {
+    const cfg = await getRuntimeConfig();
+    await applySettings({ autoPublish: !cfg.autoPublish });
+    await ctx.answerCbQuery(cfg.autoPublish ? "Auto-publish OFF" : "Auto-publish ON 🤖").catch(() => {});
+    const { text, markup } = await mainMenu();
+    await safeEdit(ctx, text, markup);
   });
 
   // Pause / Resume

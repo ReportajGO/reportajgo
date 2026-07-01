@@ -185,6 +185,17 @@
       "lang": "Til",
       "date": "Sana",
       "status": "Holat"
+    },
+    "filter": {
+      "search": "Postlarni qidirish…",
+      "allSections": "Barcha boʻlimlar",
+      "allLangs": "Barcha tillar",
+      "allStatus": "Barcha holatlar",
+      "live": "Faol",
+      "cleared": "Tozalangan",
+      "results": "{total} tadan {n} ta",
+      "noMatches": "Filtrlarga mos post yoʻq",
+      "reset": "Tozalash"
     }
   }
 }

@@ -27,6 +27,12 @@ export async function scanDueAndEnqueue(): Promise<number> {
   );
 
   for (const sp of due) {
+    // A prior job with this id may still be retained in the completed/failed set
+    // (removeOnFail:false). BullMQ treats add() with an existing jobId as a
+    // no-op, which would strand this still-PENDING post forever — so drop any
+    // stale job first, then enqueue a fresh one. Publish is idempotent (it skips
+    // PUBLISHED/CANCELLED), so this can't double-post.
+    await publishQueue.remove(sp.id).catch(() => {});
     await publishQueue.add(
       "publish",
       { scheduledPostId: sp.id },

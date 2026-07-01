@@ -148,23 +148,3 @@ export class InstagramPublisher implements Publisher {
   }
 }
 
-/** Facebook Page photo (or text) post. */
-export class FacebookPublisher implements Publisher {
-  readonly platform: Platform = "FACEBOOK";
-
-  async publish(input: PublishInput): Promise<PublishResult> {
-    const pageId = env.META_FB_PAGE_ID;
-    if (!pageId) throw new Error("META_FB_PAGE_ID is not set");
-    const caption = buildMetaCaption(input);
-    const image = input.media.find((m) => m.type === "IMAGE");
-
-    if (image) {
-      const res = await graphPost(`${pageId}/photos`, { url: image.url, caption });
-      log.info({ id: res.post_id ?? res.id }, "published photo to facebook");
-      return { externalPostId: String(res.post_id ?? res.id) };
-    }
-    const res = await graphPost(`${pageId}/feed`, { message: caption });
-    log.info({ id: res.id }, "published text to facebook");
-    return { externalPostId: String(res.id) };
-  }
-}

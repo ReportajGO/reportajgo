@@ -185,6 +185,17 @@
       "lang": "Lang",
       "date": "Date",
       "status": "Status"
+    },
+    "filter": {
+      "search": "Search posts…",
+      "allSections": "All sections",
+      "allLangs": "All languages",
+      "allStatus": "All statuses",
+      "live": "Live",
+      "cleared": "Cleared",
+      "results": "{n} of {total}",
+      "noMatches": "No posts match your filters",
+      "reset": "Reset"
     }
   }
 }
