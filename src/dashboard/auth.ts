@@ -31,7 +31,14 @@ function parseBasic(header: string | undefined): { user: string; pass: string } 
 export function dashboardAuth(): RequestHandler {
   const password = env.DASHBOARD_PASSWORD;
   if (!password) {
-    log.warn("DASHBOARD_PASSWORD not set — the dashboard is OPEN to anyone who can reach the port");
+    // Fail closed in production: never run an unauthenticated control API on a
+    // real deploy. In dev we allow it (bound to loopback) but warn loudly.
+    if (env.isProd) {
+      throw new Error(
+        "DASHBOARD_PASSWORD is required in production — refusing to start an open dashboard.",
+      );
+    }
+    log.warn("DASHBOARD_PASSWORD not set — the dashboard is OPEN (dev only, loopback bind)");
     return (_req: Request, _res: Response, next: NextFunction) => next();
   }
 

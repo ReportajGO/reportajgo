@@ -15,6 +15,7 @@ import { getMediaProvider } from "./index.js";
 import { saveImage } from "./mediaStore.js";
 import { composePrompt, describeScene } from "./prompts.js";
 import { downloadImage, findArticleImageUrl } from "./sourceImage.js";
+import { safeFetch } from "../../util/ssrf.js";
 
 const log = logger.child({ module: "media" });
 
@@ -26,7 +27,8 @@ const PURE_IMAGE_RULE =
 
 /** Fetch an image URL (local or remote) into a Buffer for compositing. */
 async function fetchImageBytes(url: string): Promise<Buffer> {
-  const res = await fetch(url);
+  // SSRF-safe: rejects internal/loopback targets and re-checks redirects.
+  const res = await safeFetch(url);
   if (!res.ok) throw new Error(`failed to fetch background image: HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }

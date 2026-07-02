@@ -10,6 +10,14 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 // silence the "inferred your workspace root" dev warning.
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
+// 'unsafe-eval' is only needed by the dev server (React Refresh / HMR). Drop it
+// in production so injected scripts can't eval(). 'unsafe-inline' stays because
+// Next.js emits inline hydration scripts without a nonce pipeline.
+const isDev = process.env.NODE_ENV !== "production";
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+  : "script-src 'self' 'unsafe-inline'";
+
 // Hardening headers applied to every response.
 const securityHeaders = [
   // Stop the site being framed (clickjacking).
@@ -35,7 +43,7 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       "img-src 'self' data: https:",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self' data:",
       "connect-src 'self' https:",

@@ -18,7 +18,17 @@ export async function GET(_req: Request, { params }: Ctx) {
     include: { category: true, author: true },
   });
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(post);
+
+  // Unpublished or soft-deleted ("cleared") posts are drafts — only expose them
+  // to an authenticated admin, and never leak the author record to the public.
+  const isPublic = post.published && !post.clearedAt;
+  if (!isPublic) {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(post);
+  }
+  const { author: _author, ...publicPost } = post;
+  return NextResponse.json(publicPost);
 }
 
 // PUT /api/posts/:id — update.

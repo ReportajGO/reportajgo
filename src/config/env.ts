@@ -18,6 +18,9 @@ const schema = z.object({
   REDIS_URL: z.string().url(),
 
   GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
+  // Optional second Gemini key. When set, calls round-robin across both keys and
+  // fail over to the other on a 429/503 — doubling free-tier throughput.
+  GEMINI_API_KEY_2: z.string().optional(),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
 
   // Image generation provider:
@@ -176,6 +179,10 @@ const schema = z.object({
   INSTAGRAM_DEBUG_DIR: z.string().default(".instagram-debug"),
 
   DASHBOARD_PORT: z.coerce.number().default(3000),
+  // Network interface the dashboard binds to. Defaults to loopback so the
+  // control API is never exposed on the LAN/internet by accident; set to
+  // "0.0.0.0" only behind an authenticating reverse proxy.
+  DASHBOARD_BIND: z.string().default("127.0.0.1"),
   APPROVERS: z.string().default(""),
 
   RESEARCH_CRON: z.string().default("0 */2 * * *"),
@@ -233,6 +240,9 @@ export const env = {
   researchSources: csv(raw.RESEARCH_SOURCES),
   approvers: csv(raw.APPROVERS),
   enabledPlatforms,
+  // All configured Gemini keys (primary + optional second), de-duped. Calls
+  // round-robin across these to spread free-tier load and fail over on 429/503.
+  geminiKeys: [...new Set([raw.GEMINI_API_KEY, raw.GEMINI_API_KEY_2].filter((k): k is string => Boolean(k && k.trim())))],
   isProd: raw.NODE_ENV === "production",
 } as const;
 

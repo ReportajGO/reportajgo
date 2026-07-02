@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { mkdir, writeFile, unlink } from "fs/promises";
 import path from "path";
+import { safeFetch } from "./ssrf";
 
 // Where uploads land on disk and how they map to a public URL.
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
@@ -80,7 +81,14 @@ const MAX_URL_BYTES = 20 * 1024 * 1024; // 20 MB
  * they are served same-origin (satisfies the site CSP and works off-localhost).
  */
 export async function saveImageFromUrl(url: string): Promise<string> {
-  const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(25_000) });
+  // SSRF-safe: rejects internal/loopback/link-local targets and re-checks each
+  // redirect hop (the URL comes from the agent's request body).
+  let res: Response;
+  try {
+    res = await safeFetch(url, {}, 25_000);
+  } catch (e) {
+    throw new UploadError(`refused image URL: ${e instanceof Error ? e.message : "blocked"}`);
+  }
   if (!res.ok) throw new UploadError(`fetch image failed: HTTP ${res.status}`);
   const buffer = Buffer.from(await res.arrayBuffer());
   if (buffer.length === 0) throw new UploadError("Empty image");

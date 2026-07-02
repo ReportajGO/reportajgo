@@ -187,6 +187,16 @@ export async function retryFailed(queueName: string): Promise<{ retried: number 
   return { retried: failed.length };
 }
 
+/**
+ * Delete every REJECTED draft (and its media + scheduled post, via cascade).
+ * Clears out the Rejected list in one action.
+ */
+export async function removeRejectedDrafts(): Promise<{ removed: number }> {
+  const res = await prisma.postDraft.deleteMany({ where: { status: "REJECTED" } });
+  log.info({ removed: res.count }, "removed rejected drafts");
+  return { removed: res.count };
+}
+
 type LifecycleStatus = "PENDING_APPROVAL" | "SCHEDULED" | "PUBLISHED" | "REJECTED" | "FAILED";
 
 /** Post drafts in a given lifecycle state, with media + source + schedule. */

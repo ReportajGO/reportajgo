@@ -50,6 +50,10 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { themes?: unknown } | null;
   if (!body || !Array.isArray(body.themes))
     return NextResponse.json({ error: "Body must be { themes: [...] }" }, { status: 400 });
+  // Each theme triggers a Gemini translation call — cap the batch so a bad/large
+  // payload can't burn quota unbounded.
+  if (body.themes.length > 50)
+    return NextResponse.json({ error: "Too many themes (max 50)" }, { status: 400 });
 
   // Validate + normalize the incoming themes.
   const seen = new Set<string>();

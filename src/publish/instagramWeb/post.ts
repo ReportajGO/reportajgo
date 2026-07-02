@@ -224,25 +224,86 @@ async function writeCaption(page: Page, caption: string): Promise<void> {
   await page.waitForTimeout(500);
 }
 
-/** Click "Share" and wait for the success confirmation. */
-async function share(page: Page, isVideo: boolean): Promise<void> {
-  const clicked = await clickFirst(page, [
-    'div[role="button"]:has-text("Share")',
-    'button:has-text("Share")',
-    'div[role="dialog"] >> text="Share"',
-  ]);
-  if (!clicked) throw new Error("could not find the 'Share' button");
+/**
+ * Click the caption-screen "Share" once, trying several strategies. Instagram's
+ * top-bar Share is a text-styled clickable div (not a real <button>), so the
+ * last resort is a DOM click on the element whose trimmed text is exactly
+ * "Share" — that reliably hits the header control. Returns true if it clicked.
+ */
+async function clickShareOnce(page: Page): Promise<boolean> {
+  const locs = [
+    page.getByRole("button", { name: "Share", exact: true }),
+    page.locator('div[role="dialog"]').getByText("Share", { exact: true }),
+    page.getByText("Share", { exact: true }),
+  ];
+  for (const l of locs) {
+    const el = l.first();
+    if (await el.isVisible().catch(() => false)) {
+      await el.click({ force: true, timeout: 3000 }).catch(() => {});
+      return true;
+    }
+  }
+  // DOM fallback: click the exact-"Share" clickable element directly. Runs in
+  // the browser; globals are reached via globalThis so the Node build (no DOM
+  // lib) still typechecks.
+  return page
+    .evaluate(() => {
+      const doc = (globalThis as { document?: unknown }).document as
+        | { querySelectorAll(s: string): ArrayLike<{ textContent: string | null; click(): void }> }
+        | undefined;
+      if (!doc) return false;
+      const nodes = Array.from(
+        doc.querySelectorAll('div[role="button"], button, [tabindex], a, span'),
+      );
+      const el = nodes.find((n) => (n.textContent || "").trim() === "Share");
+      if (el) {
+        el.click();
+        return true;
+      }
+      return false;
+    })
+    .catch(() => false);
+}
 
-  // Wait for "Your post has been shared" / "Your reel has been shared". Video
-  // encodes server-side, so give reels extra time.
-  const timeout = isVideo ? SHARE_TIMEOUT_MS * 2 : SHARE_TIMEOUT_MS;
-  const ok = page
+/** Did we land on the "post shared" confirmation (or did the composer close)? */
+async function isShared(page: Page): Promise<boolean> {
+  const ok = await page
     .getByText(/your (post|reel) has been shared|post shared|reel shared|reklama joylandi/i)
-    .first();
-  await ok.waitFor({ state: "visible", timeout }).catch(() => {
-    // Some flows just close the dialog — tolerate a missing confirmation.
-    log.warn("no explicit 'shared' confirmation seen; assuming success");
-  });
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (ok) return true;
+  // Fallback: the caption box is gone → the composer closed → it was shared.
+  const captionGone = !(await page
+    .locator('div[aria-label="Write a caption..."], div[role="textbox"][contenteditable="true"]')
+    .first()
+    .isVisible()
+    .catch(() => false));
+  return captionGone;
+}
+
+/**
+ * Click "Share" and keep at it until the post is actually confirmed — no human
+ * needs to touch the window. Re-clicks each round in case the first click didn't
+ * register, and tolerates the async video encode for reels.
+ */
+async function share(page: Page, isVideo: boolean): Promise<void> {
+  const maxMs = isVideo ? SHARE_TIMEOUT_MS * 2 : SHARE_TIMEOUT_MS;
+  const deadline = Date.now() + maxMs;
+  let everClicked = false;
+
+  while (Date.now() < deadline) {
+    if (await isShared(page)) {
+      log.info("instagram post confirmed shared");
+      return;
+    }
+    if (await clickShareOnce(page)) everClicked = true;
+    await page.waitForTimeout(2000);
+  }
+
+  if (await isShared(page)) return;
+  if (!everClicked) throw new Error("could not find the 'Share' button");
+  log.warn("no explicit 'shared' confirmation after clicking Share; assuming success");
 }
 
 /** Best-effort: open own profile and read the newest post's permalink. */

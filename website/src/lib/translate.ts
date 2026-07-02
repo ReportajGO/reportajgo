@@ -187,14 +187,18 @@ const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function geminiLabels(raw: string, model: string): Promise<Labels> {
-  const key = process.env.GEMINI_API_KEY!;
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  // Round-robin across the configured keys so a throttled key fails over.
+  const keys = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2].filter(
+    (k): k is string => Boolean(k && k.trim()),
+  );
 
   // Retry transient 5xx/429 a few times — these blips are common and usually
   // clear within a second or two, so they shouldn't surface as a hard error.
   let lastStatus = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
+    const key = keys[attempt % keys.length];
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -7,6 +7,11 @@ import {
   VALID_PLATFORMS,
 } from "../config/settingsStore.js";
 import { getStatus, publishAllPending, runPipelineNow } from "../dashboard/controlService.js";
+import { rateLimited } from "./auth.js";
+
+// Cooldowns for the two most expensive control-panel actions (Gemini/image/publish spend).
+const RUN_COOLDOWN_MS = 60_000;
+const PUBLISH_ALL_COOLDOWN_MS = 30_000;
 import {
   isResearchCronActive,
   pauseResearchCron,
@@ -255,17 +260,26 @@ export function registerControlPanel(bot: Telegraf): void {
 
   // Force scan / run
   bot.action("cp:run", async (ctx) => {
+    if (rateLimited(ctx.from?.id, "cp:run", RUN_COOLDOWN_MS)) {
+      await ctx.answerCbQuery("⏳ Just ran — please wait a minute.", { show_alert: true }).catch(() => {});
+      return;
+    }
     try {
       const { jobId } = await runPipelineNow();
       await ctx.answerCbQuery("Pipeline started 🔥").catch(() => {});
       await ctx.reply(`🔥 Research run queued (job ${jobId}). New posts will arrive here for approval.`);
     } catch (err) {
-      await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true }).catch(() => {});
+      log.error({ err }, "cp:run failed");
+      await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true }).catch(() => {});
     }
   });
 
   // Publish everything pending at once (skip per-item approval)
   bot.action("cp:publishall", async (ctx) => {
+    if (rateLimited(ctx.from?.id, "cp:publishall", PUBLISH_ALL_COOLDOWN_MS)) {
+      await ctx.answerCbQuery("⏳ Please wait a moment before publishing again.", { show_alert: true }).catch(() => {});
+      return;
+    }
     try {
       await ctx.answerCbQuery("Publishing all… 🚀").catch(() => {});
       const { items, skipped } = await publishAllPending(`tg:${ctx.from?.id ?? "unknown"}:all`);
@@ -276,7 +290,8 @@ export function registerControlPanel(bot: Telegraf): void {
             (skipped > 0 ? `\n⚠️ ${skipped} draft(s) skipped (no ready image yet).` : "");
       await ctx.reply(msg, { parse_mode: "HTML" });
     } catch (err) {
-      await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true }).catch(() => {});
+      log.error({ err }, "cp:publishall failed");
+      await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true }).catch(() => {});
     }
   });
 

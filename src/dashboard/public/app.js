@@ -21,6 +21,7 @@ const I18N = {
     pipelineControls: "Pipeline controls",
     runPipeline: "▶ Run pipeline now", scanNow: "⟳ Scan due posts",
     publishAll: "🚀 Publish all pending",
+    removeAll: "🗑 Remove all", t_removed: "Removed", t_confirmRemove: "Delete all rejected drafts? This cannot be undone.",
     pauseCron: "⏸ Pause auto-research", resumeCron: "▶ Resume auto-research",
     retryPipeline: "↻ Retry failed (pipeline)", retryPublish: "↻ Retry failed (publish)",
     refresh: "⟲ Refresh",
@@ -68,6 +69,7 @@ const I18N = {
     pipelineControls: "Konveyer boshqaruvi",
     runPipeline: "▶ Hozir ishga tushirish", scanNow: "⟳ Navbatdagilarni tekshirish",
     publishAll: "🚀 Barchasini chop etish",
+    removeAll: "🗑 Hammasini o‘chirish", t_removed: "O‘chirildi", t_confirmRemove: "Barcha rad etilganlar o‘chirilsinmi? Buni qaytarib bo‘lmaydi.",
     pauseCron: "⏸ Avto-izlanishni to‘xtatish", resumeCron: "▶ Avto-izlanishni davom ettirish",
     retryPipeline: "↻ Qayta urinish (konveyer)", retryPublish: "↻ Qayta urinish (e’lon)",
     refresh: "⟲ Yangilash",
@@ -115,6 +117,7 @@ const I18N = {
     pipelineControls: "Управление конвейером",
     runPipeline: "▶ Запустить сейчас", scanNow: "⟳ Проверить очередь",
     publishAll: "🚀 Опубликовать все",
+    removeAll: "🗑 Удалить все", t_removed: "Удалено", t_confirmRemove: "Удалить все отклонённые? Это необратимо.",
     pauseCron: "⏸ Остановить авто-поиск", resumeCron: "▶ Возобновить авто-поиск",
     retryPipeline: "↻ Повторить (конвейер)", retryPublish: "↻ Повторить (публикация)",
     refresh: "⟲ Обновить",
@@ -208,11 +211,20 @@ function toast(msg, isErr = false) {
   setTimeout(() => (el2.className = "toast"), 2600);
 }
 
-async function api(path, opts) {
-  const res = await fetch("/api" + path, opts);
+async function api(path, opts = {}) {
+  // Always send X-Requested-With so the server's CSRF guard accepts the call;
+  // a cross-site attacker can't set this header without a blocked CORS preflight.
+  const headers = { "X-Requested-With": "XMLHttpRequest", ...(opts.headers || {}) };
+  const res = await fetch("/api" + path, { ...opts, headers });
   const json = await res.json().catch(() => ({ ok: false, error: "bad response" }));
   if (!json.ok) throw new Error(json.error || `HTTP ${res.status}`);
   return json.data;
+}
+
+// Only allow http(s) links in rendered hrefs — blocks javascript:/data: XSS from
+// URLs that originate in researched/pasted content.
+function safeHref(url) {
+  return /^https?:\/\//i.test(String(url || "")) ? String(url) : "#";
 }
 
 async function withBusy(btn, fn) {
@@ -455,7 +467,7 @@ function pendingCard(d) {
       <div class="meta">
         <span class="badge-plat">${esc(d.platform)}</span>
         <span class="src">${esc(d.newsItem?.sourceName ?? t("sourceWord"))} ·
-          <a href="${esc(d.newsItem?.sourceUrl)}" target="_blank" rel="noopener">${t("linkWord")}</a></span>
+          <a href="${esc(safeHref(d.newsItem?.sourceUrl))}" target="_blank" rel="noopener noreferrer">${t("linkWord")}</a></span>
       </div>
       <h3>${esc(d.headline?.trim() || d.newsItem?.title || "")}</h3>
       <div>
@@ -637,6 +649,23 @@ async function loadTab(status) {
     if (!posts.length) {
       list.innerHTML = `<div class="empty">${t("nothingHere")}</div>`;
       return;
+    }
+    // Bulk "Remove all" for the Rejected list.
+    if (status === "REJECTED") {
+      const bar = document.createElement("div");
+      bar.className = "actions";
+      bar.style.marginBottom = "12px";
+      bar.innerHTML = `<button class="ghost sm f-remove-rejected">${t("removeAll")} (${posts.length})</button>`;
+      bar.querySelector(".f-remove-rejected").addEventListener("click", (e) =>
+        withBusy(e.target, async () => {
+          if (!confirm(t("t_confirmRemove"))) return;
+          const r = await api("/drafts/remove-rejected", { method: "POST" });
+          toast(`${t("t_removed")}: ${r?.removed ?? 0}`);
+          loadTab("REJECTED");
+          loadStatus();
+        }),
+      );
+      list.appendChild(bar);
     }
     const build = status === "PENDING_APPROVAL" ? pendingCard : readonlyCard;
     posts.forEach((p) => list.appendChild(build(p)));

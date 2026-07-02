@@ -12,7 +12,12 @@ import {
   type InstantStage,
 } from "../pipeline/instantPost.js";
 import { handleControlPanelText, mainMenu, registerControlPanel } from "./controlPanel.js";
+import { hasApprovers, isApprover, rateLimited, requireApprover } from "./auth.js";
 import { startWebApp } from "./webApp.js";
+
+// Instant-publish from a pasted link is the most expensive per-message action
+// (Gemini research + drafting + image gen), so throttle it hard per user.
+const INSTANT_COOLDOWN_MS = 30_000;
 
 const log = logger.child({ module: "telegram-approval" });
 
@@ -152,22 +157,15 @@ async function sweep(): Promise<void> {
     mediaByNews.set(d.newsItemId, acc);
   }
 
-  // Don't send a card while any of the item's drafts is still generating media
-  // (the Reel takes minutes) — otherwise we'd send an image-only card first and
-  // a second one once the video is ready.
-  const stillGenerating = new Set(
-    (
-      await prisma.postDraft.findMany({
-        where: { status: "PENDING_MEDIA", newsItemId: { in: [...byNews.keys()] } },
-        select: { newsItemId: true },
-      })
-    ).map((d) => d.newsItemId),
-  );
-
+  // Send a card as soon as ANY of the item's drafts has ready media — don't wait
+  // for slower siblings (e.g. the Instagram Reel video, which takes minutes). When
+  // a still-rendering sibling becomes ready later it moves to PENDING_APPROVAL and
+  // the next sweep sends its own follow-up card. Approving a card only schedules
+  // siblings whose media is already READY (see approveDraft), so nothing publishes
+  // without its media.
   for (const rep of byNews.values()) {
-    if (stillGenerating.has(rep.newsItemId)) continue; // reel still rendering
     const media = mediaByNews.get(rep.newsItemId) ?? [];
-    if (media.length === 0) continue; // media not ready yet
+    if (media.length === 0) continue; // this item has no ready media yet
     // Show the Reel (video) when the item has one; keep the rep's headline/text.
     const draft = { ...rep, media };
     try {
@@ -211,10 +209,15 @@ function firstUrl(text: string): string | undefined {
 async function handleInstantUrl(chatId: number, url: string, fromId: number | undefined): Promise<void> {
   if (!bot) return;
 
-  // Only registered approvers may trigger an instant publish.
-  const approvers = await getApproverChats();
-  if (!approvers.includes(chatId)) {
-    await bot.telegram.sendMessage(chatId, "⛔️ You're not registered. Send /start first.");
+  // Only allow-listed approvers may trigger an instant publish (defense in depth
+  // on top of the global auth middleware, keyed on the actual user id).
+  if (!isApprover(fromId)) {
+    await bot.telegram.sendMessage(chatId, "⛔️ Not authorized.");
+    return;
+  }
+  // Throttle: instant-publish is expensive (Gemini + image gen + publish).
+  if (rateLimited(fromId, "instant", INSTANT_COOLDOWN_MS)) {
+    await bot.telegram.sendMessage(chatId, "⏳ Please wait a moment before sending another link.");
     return;
   }
 
@@ -254,8 +257,8 @@ async function handleInstantUrl(chatId: number, url: string, fromId: number | un
     await bot.telegram.sendMessage(chatId, lines.join("\n"), { parse_mode: "HTML" });
     log.info({ url, newsItemId: result.newsItemId, published }, "instant url published");
   } catch (err) {
-    const message = err instanceof Error ? err.message : "failed to process the link";
-    await setStatus(`❌ ${message}`);
+    // Don't echo raw error text to chat (can leak internal details); log it.
+    await setStatus("❌ Couldn't process that link. Please try again.");
     log.error({ err, url }, "instant url failed");
   }
 }
@@ -269,12 +272,26 @@ export function startApprovalBot(): { stop: () => void } | undefined {
     return undefined;
   }
 
+  if (!hasApprovers()) {
+    log.error(
+      "APPROVERS is empty — the Telegram bot would be open to anyone. " +
+        "Set APPROVERS to your Telegram user id(s); refusing to start until then.",
+    );
+    return undefined;
+  }
+
   bot = new Telegraf(token);
+
+  // AUTHORIZATION GATE — must be the first middleware so every command, action
+  // and message is checked against the static approver allow-list before any
+  // handler runs. Without this, anyone who finds the bot could approve/publish.
+  bot.use(requireApprover);
 
   // Control-panel handlers (cp:* callbacks + text inputs).
   registerControlPanel(bot);
 
   bot.start(async (ctx) => {
+    // Reaching here means the caller already passed the allow-list gate.
     await addApproverChat(ctx.chat.id);
     await ctx.reply(
       "✅ You're registered as a ReportajGO approver.\n" +
@@ -317,7 +334,8 @@ export function startApprovalBot(): { stop: () => void } | undefined {
       await ctx.editMessageReplyMarkup(undefined).catch(() => {});
       await ctx.reply("✅ Approved — publishing the website article and channel post now.");
     } catch (err) {
-      await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true });
+      log.error({ err }, "approve callback failed");
+      await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true });
     }
   });
 
@@ -333,7 +351,8 @@ export function startApprovalBot(): { stop: () => void } | undefined {
       await ctx.editMessageReplyMarkup(undefined).catch(() => {});
       await ctx.reply("⚡ Approved & publishing now.");
     } catch (err) {
-      await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true });
+      log.error({ err }, "publish-now callback failed");
+      await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true });
     }
   });
 
@@ -345,7 +364,8 @@ export function startApprovalBot(): { stop: () => void } | undefined {
       await ctx.editMessageReplyMarkup(undefined).catch(() => {});
       await ctx.reply("❌ Rejected.");
     } catch (err) {
-      await ctx.answerCbQuery(`Error: ${err instanceof Error ? err.message : "failed"}`, { show_alert: true });
+      log.error({ err }, "reject callback failed");
+      await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true });
     }
   });
 

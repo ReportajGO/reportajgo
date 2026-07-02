@@ -46,7 +46,11 @@ export async function publishScheduledPost(scheduledPostId: string): Promise<voi
       select: { body: true, scheduledPost: { select: { status: true } } },
     });
     const websiteStatus = websiteDraft?.scheduledPost?.status;
-    if (websiteStatus && websiteStatus !== "PUBLISHED") {
+    // Only wait while the website post is still IN PROGRESS. If it FAILED or was
+    // CANCELLED it will never become PUBLISHED, so publish the social post anyway
+    // (just without the article link) instead of retrying forever.
+    const inProgress = new Set(["PENDING", "PUBLISHING", "SCHEDULED"]);
+    if (websiteStatus && inProgress.has(websiteStatus)) {
       log.info({ scheduledPostId, websiteStatus }, "waiting for website publish");
       throw new Error("waiting for website article to publish before social post");
     }

@@ -8,7 +8,16 @@ async function model(): Promise<string> {
   return (await getRuntimeConfig()).geminiModel;
 }
 
-const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+// One client per configured key. Calls round-robin across them so free-tier
+// load is split, and each retry advances to the next key — so a 429/503 on one
+// key fails over to the other instead of just backing off.
+const clients = env.geminiKeys.map((apiKey) => new GoogleGenAI({ apiKey }));
+let rrIndex = 0;
+function nextClient(): GoogleGenAI {
+  const client = clients[rrIndex % clients.length]!;
+  rrIndex++;
+  return client;
+}
 
 const log = logger.child({ module: "gemini" });
 
@@ -51,11 +60,14 @@ export async function withGeminiRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw lastErr;
 }
 
-/** Call generateContent with exponential backoff on transient errors. */
+/**
+ * Call generateContent with exponential backoff on transient errors, rotating
+ * to the next API key on each attempt (so a throttled key fails over).
+ */
 async function callModel(
-  params: Parameters<typeof ai.models.generateContent>[0],
-): ReturnType<typeof ai.models.generateContent> {
-  return withGeminiRetry(() => ai.models.generateContent(params));
+  params: Parameters<GoogleGenAI["models"]["generateContent"]>[0],
+): ReturnType<GoogleGenAI["models"]["generateContent"]> {
+  return withGeminiRetry(() => nextClient().models.generateContent(params));
 }
 
 export interface GroundedResult<T> {

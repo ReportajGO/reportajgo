@@ -18,6 +18,7 @@ import {
   getStatus,
   listPostsByStatus,
   publishAllPending,
+  removeRejectedDrafts,
   retryFailed,
   runPipelineNow,
   scanNow,
@@ -100,6 +101,8 @@ api.post("/pipeline/run", handle(() => runPipelineNow()));
 api.post("/scheduler/scan", handle(() => scanNow()));
 // Publish every pending-approval draft at once (no per-item review).
 api.post("/publish/all", handle(() => publishAllPending("dashboard:all")));
+// Delete all REJECTED drafts (clears the Rejected list).
+api.post("/drafts/remove-rejected", handle(() => removeRejectedDrafts()));
 api.post("/queues/:name/retry-failed", handle((req) => retryFailed(req.params.name ?? "")));
 
 api.post("/cron/pause", handle(async () => {

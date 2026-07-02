@@ -5,7 +5,17 @@
  * (AGENT_API_KEY) instead of a NextAuth session. Keep this key secret — anyone
  * holding it can publish news to the site.
  */
+import { timingSafeEqual } from "node:crypto";
+
 const API_KEY = process.env.AGENT_API_KEY ?? "";
+
+/** Constant-time string comparison (avoids leaking the key via timing). */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
 
 /** Extract the bearer token from the Authorization header (or `x-api-key`). */
 function extractKey(req: Request): string | null {
@@ -27,7 +37,7 @@ export function checkApiKey(req: Request): ApiKeyCheck {
   }
   const provided = extractKey(req);
   if (!provided) return { ok: false, status: 401, error: "Missing API key" };
-  if (provided !== API_KEY)
+  if (!safeEqual(provided, API_KEY))
     return { ok: false, status: 403, error: "Invalid API key" };
   return { ok: true };
 }

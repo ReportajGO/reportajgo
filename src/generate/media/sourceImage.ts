@@ -1,4 +1,5 @@
 import { logger } from "../../config/logger.js";
+import { safeFetch } from "../../util/ssrf.js";
 
 const log = logger.child({ module: "source-image" });
 
@@ -19,11 +20,12 @@ export interface FetchedImage {
  */
 export async function findArticleImageUrl(pageUrl: string): Promise<string | null> {
   try {
-    const res = await fetch(pageUrl, {
-      redirect: "follow",
-      headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    // SSRF-safe: validates the page URL and every redirect hop is public.
+    const res = await safeFetch(
+      pageUrl,
+      { headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml" } },
+      FETCH_TIMEOUT_MS,
+    );
     if (!res.ok) return null;
     if (!(res.headers.get("content-type") ?? "").includes("html")) return null;
     const html = await res.text();
@@ -37,11 +39,12 @@ export async function findArticleImageUrl(pageUrl: string): Promise<string | nul
 /** Download an image URL into bytes, validating it's a real raster image. */
 export async function downloadImage(url: string): Promise<FetchedImage | null> {
   try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      headers: { "user-agent": UA, accept: "image/*" },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    // SSRF-safe: the og:image URL comes from a third-party page, so validate it.
+    const res = await safeFetch(
+      url,
+      { headers: { "user-agent": UA, accept: "image/*" } },
+      FETCH_TIMEOUT_MS,
+    );
     if (!res.ok) return null;
     const mime = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
     if (!mime.startsWith("image/") || mime.includes("svg")) return null;
