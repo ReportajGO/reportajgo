@@ -28,9 +28,9 @@ export default async function AdminLayout({
       <div className="min-h-screen bg-bg-sub lg:flex">
         {/* Sidebar (desktop) */}
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-bg px-4 py-5 lg:flex">
-          <Link href="/admin" className="mb-6 flex items-center gap-2 px-1">
-            <Logo size="sm" />
-          </Link>
+          <div className="mb-6 px-1">
+            <Logo size="sm" href="/admin" />
+          </div>
           <span className="mb-2 px-3 font-display text-[11px] font-extrabold uppercase tracking-[.12em] text-ink-soft">
             {t("title")}
           </span>

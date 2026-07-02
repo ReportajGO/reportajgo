@@ -63,8 +63,13 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   poweredByHeader: false, // hide "X-Powered-By: Next.js"
   images: {
-    // Allow remote article cover images (admins paste external URLs).
-    remotePatterns: [{ protocol: "https", hostname: "**" }],
+    remotePatterns: [
+      // Remote article cover images (admins paste external URLs).
+      { protocol: "https", hostname: "**" },
+      // The agent's local media server (generated cards/photos) during dev.
+      { protocol: "http", hostname: "localhost" },
+      { protocol: "http", hostname: "127.0.0.1" },
+    ],
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

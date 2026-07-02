@@ -25,9 +25,15 @@ function clearFails(key: string): void {
   attempts.delete(key);
 }
 
-export const authOptions: NextAuthOptions = {
+// `trustHost` is supported by NextAuth v4 at runtime but missing from its public
+// type, so widen the annotation to allow it.
+export const authOptions: NextAuthOptions & { trustHost?: boolean } = {
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
+  // Derive the site URL from the incoming request host instead of a hardcoded
+  // NEXTAUTH_URL, so login works over localhost, the LAN IP, and the (changing)
+  // Cloudflare tunnel alike. NEXTAUTH_URL is intentionally left unset in .env.
+  trustHost: true,
   pages: {
     signIn: "/ru/login",
   },

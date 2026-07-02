@@ -23,10 +23,13 @@ export default function Logo({
   size = "md",
   onDark = false,
   invert = false,
+  href = "/",
 }: {
   size?: "sm" | "md" | "lg";
   onDark?: boolean;
   invert?: boolean;
+  /** Where the logo links. Defaults to the site home. */
+  href?: string;
 }) {
   // mobile height → desktop height (px), and the desktop width used as the
   // intrinsic dimension for next/image.
@@ -49,8 +52,8 @@ export default function Logo({
 
   return (
     <Link
-      href="/"
-      aria-label="ReportajGO — home"
+      href={href}
+      aria-label="RΞPORTAJ GO"
       className="group inline-flex items-center"
     >
       {onDark ? (
