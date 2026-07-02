@@ -25,6 +25,12 @@ export interface RuntimeConfig {
   maxItemsPerRun: number;
   /** Auto-approve + publish each ready story with no human approval step. */
   autoPublish: boolean;
+  /**
+   * When true, automatic research is paused: the cron is not registered and any
+   * scheduled/in-flight pipeline run skips research (manual "run now" still
+   * works). Persisted so a restart doesn't silently resume research.
+   */
+  researchPaused: boolean;
 }
 
 // One DB row holds the whole override blob as JSON under this key.
@@ -45,6 +51,7 @@ const updateSchema = z
     researchMaxAgeHours: z.coerce.number().int().positive().max(168),
     maxItemsPerRun: z.coerce.number().int().positive().max(50),
     autoPublish: z.boolean(),
+    researchPaused: z.boolean(),
   })
   .partial()
   .strict();
@@ -62,12 +69,26 @@ function envDefaults(): RuntimeConfig {
     researchMaxAgeHours: env.RESEARCH_MAX_AGE_HOURS,
     maxItemsPerRun: env.MAX_ITEMS_PER_RUN,
     autoPublish: env.AUTO_PUBLISH,
+    researchPaused: false,
   };
 }
 
 // In-memory cache so hot paths (every Gemini call reads the model) never hit
 // the DB. Populated on first read, replaced on every save.
 let cache: RuntimeConfig | null = null;
+
+// Serializes read-modify-write of the shared config blob. Without it, a pause
+// that interleaves with a settings edit (both read the snapshot, then upsert the
+// whole blob) can lose one write — last-writer-wins. All mutators run through it.
+let writeChain: Promise<unknown> = Promise.resolve();
+function withConfigLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = writeChain.then(fn, fn);
+  writeChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
 
 function dedupeUpper(values: string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter(Boolean))];
@@ -103,6 +124,7 @@ function merge(base: RuntimeConfig, over: Partial<RuntimeConfig>): RuntimeConfig
     researchMaxAgeHours: over.researchMaxAgeHours ?? base.researchMaxAgeHours,
     maxItemsPerRun: over.maxItemsPerRun ?? base.maxItemsPerRun,
     autoPublish: over.autoPublish ?? base.autoPublish,
+    researchPaused: over.researchPaused ?? base.researchPaused,
   };
 }
 
@@ -144,11 +166,23 @@ export async function updateRuntimeConfig(
     clean.enabledPlatforms = [...new Set(clean.enabledPlatforms)] as PlatformName[];
   }
 
-  const current = await getRuntimeConfig();
-  const next = merge(current, clean as Partial<RuntimeConfig>);
-  const changedCron = next.researchCron !== current.researchCron;
+  return withConfigLock(async () => {
+    const current = await getRuntimeConfig();
+    const next = merge(current, clean as Partial<RuntimeConfig>);
+    const changedCron = next.researchCron !== current.researchCron;
 
-  // Persist only the fields that differ from env defaults to keep the blob lean.
+    const overrides = await persistConfig(next);
+    log.info({ overrides, changedCron }, "runtime settings updated");
+    return { config: next, changedCron };
+  });
+}
+
+/**
+ * Persist a fully-merged config: store only the fields that differ from env
+ * defaults (keeps the blob lean) and refresh the in-memory cache. Returns the
+ * override blob that was written, for logging.
+ */
+async function persistConfig(next: RuntimeConfig): Promise<Partial<RuntimeConfig>> {
   const defaults = envDefaults();
   const overrides: Partial<RuntimeConfig> = {};
   (Object.keys(next) as (keyof RuntimeConfig)[]).forEach((k) => {
@@ -164,6 +198,34 @@ export async function updateRuntimeConfig(
   });
 
   cache = next;
-  log.info({ overrides, changedCron }, "runtime settings updated");
-  return { config: next, changedCron };
+  return overrides;
+}
+
+/**
+ * Persist the research-paused flag (and refresh the cache) so pause/resume
+ * survives restarts and every in-process consumer sees it immediately.
+ */
+export async function setResearchPaused(paused: boolean): Promise<void> {
+  await withConfigLock(async () => {
+    const current = await getRuntimeConfig();
+    if (current.researchPaused === paused) return;
+    await persistConfig({ ...current, researchPaused: paused });
+    log.info({ researchPaused: paused }, "research pause state updated");
+  });
+}
+
+/**
+ * Read the research-paused flag straight from the DB, bypassing the in-memory
+ * cache. Workers may run in a SEPARATE process from the dashboard/bot that sets
+ * the flag (horizontal scaling via `npm run worker`), so their boot-warmed cache
+ * would otherwise never see a pause. Cheap enough for the few checks per run.
+ */
+export async function isResearchPaused(): Promise<boolean> {
+  const row = await prisma.setting.findUnique({ where: { key: SETTINGS_KEY } });
+  if (!row) return false;
+  try {
+    return (JSON.parse(row.value) as { researchPaused?: unknown }).researchPaused === true;
+  } catch {
+    return false;
+  }
 }

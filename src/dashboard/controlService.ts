@@ -129,7 +129,9 @@ export async function getStatus() {
 
 /** Enqueue a one-off pipeline run (research -> filter -> copy -> media). */
 export async function runPipelineNow(): Promise<{ jobId?: string }> {
-  const job = await pipelineQueue.add("research-manual", {}, { removeOnComplete: true });
+  // `manual` marks this as an explicit "run now" so the worker runs it even
+  // while automatic research is paused.
+  const job = await pipelineQueue.add("research-manual", { manual: true }, { removeOnComplete: true });
   log.info({ jobId: job.id }, "manual pipeline run enqueued");
   return { jobId: job.id };
 }

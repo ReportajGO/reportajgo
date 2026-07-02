@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { getRuntimeConfig } from "../config/settingsStore.js";
+import { getRuntimeConfig, setResearchPaused } from "../config/settingsStore.js";
 import { logger } from "../config/logger.js";
 import { pipelineQueue, schedulerQueue } from "./queues.js";
 
@@ -26,19 +26,23 @@ async function clearResearchRepeat(): Promise<void> {
  * settings takes effect on boot.
  */
 export async function registerRepeatableJobs(): Promise<void> {
-  const { researchCron } = await getRuntimeConfig();
+  const { researchCron, researchPaused } = await getRuntimeConfig();
   await clearResearchRepeat();
-  await pipelineQueue.add(
-    RESEARCH_JOB,
-    {},
-    { repeat: { pattern: researchCron, tz: env.TZ }, removeOnComplete: true },
-  );
+  // Respect a persisted pause: don't re-arm the research cron on boot, otherwise
+  // a restart would silently resume research the operator had stopped.
+  if (!researchPaused) {
+    await pipelineQueue.add(
+      RESEARCH_JOB,
+      {},
+      { repeat: { pattern: researchCron, tz: env.TZ }, removeOnComplete: true },
+    );
+  }
   await schedulerQueue.add(
     "scan",
     {},
     { repeat: { every: SCAN_INTERVAL_MS }, removeOnComplete: true },
   );
-  log.info({ cron: researchCron, tz: env.TZ }, "repeatable jobs registered");
+  log.info({ cron: researchCron, tz: env.TZ, researchPaused }, "repeatable jobs registered");
 }
 
 /** Re-point the research cron to a new pattern (used after a settings change). */
@@ -52,14 +56,24 @@ export async function reRegisterResearchCron(pattern: string): Promise<void> {
   log.info({ cron: pattern, tz: env.TZ }, "research cron re-registered");
 }
 
-/** Pause automatic research by removing the repeatable job. */
+/**
+ * Pause automatic research: persist the paused flag (so it survives restarts and
+ * every in-process consumer sees it), remove the repeatable job, and drop any
+ * pipeline jobs already waiting/delayed so no new run starts. An in-flight run
+ * checks the flag at each stage boundary and stops before drafting/media.
+ */
 export async function pauseResearchCron(): Promise<void> {
+  await setResearchPaused(true);
   await clearResearchRepeat();
+  // Remove queued (waiting + delayed) pipeline jobs; active jobs can't be
+  // removed but will short-circuit on the paused flag.
+  await pipelineQueue.drain(true);
   log.info("research cron paused");
 }
 
 /** Resume automatic research using the current settings cron. */
 export async function resumeResearchCron(): Promise<void> {
+  await setResearchPaused(false);
   const { researchCron } = await getRuntimeConfig();
   await reRegisterResearchCron(researchCron);
 }

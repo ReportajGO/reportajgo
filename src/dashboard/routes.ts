@@ -117,9 +117,10 @@ api.post("/cron/resume", handle(async () => {
 // ─── Control panel: live settings ─────────────────────────────────────────────
 api.put("/settings", handle(async (req) => {
   const { config, changedCron } = await updateRuntimeConfig(req.body);
-  // A changed cron only matters while auto-research is active; resume/re-register
-  // keeps the repeatable job pointed at the new pattern.
-  if (changedCron) await reRegisterResearchCron(config.researchCron);
+  // A changed cron only matters while auto-research is active. Never re-arm the
+  // repeatable while paused — that would silently resume research the operator
+  // stopped. Resume re-registers with the current pattern when they unpause.
+  if (changedCron && !config.researchPaused) await reRegisterResearchCron(config.researchCron);
   // Topic filters drive the website's theme pages: sync them so adding/removing
   // a filter makes the matching theme appear/disappear on the site immediately.
   if (req.body && typeof req.body === "object" && "researchTopics" in req.body) {
