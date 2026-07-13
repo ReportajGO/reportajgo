@@ -28,13 +28,7 @@ export default async function HomePage({
     return (
       <div className="py-24 text-center font-display">
         <b className="mb-2 block text-2xl text-ink">ReportajGO</b>
-        <p className="text-ink-soft">
-          No posts in this language yet. Add some in{" "}
-          <Link href="/admin" className="text-brand-red underline">
-            /admin
-          </Link>
-          .
-        </p>
+        <p className="text-ink-soft">No posts in this language yet.</p>
       </div>
     );
   }
