@@ -31,11 +31,15 @@ let bot: Telegraf | undefined;
 // ── approver registry (stored in the Setting table) ──────────────────────────
 async function getApproverChats(): Promise<number[]> {
   const row = await prisma.setting.findUnique({ where: { key: APPROVERS_KEY } });
-  if (!row) return [];
+  const configured = env.approvers
+    .map((id) => Number(id))
+    .filter((id) => Number.isSafeInteger(id));
+  if (!row) return configured;
   try {
-    return JSON.parse(row.value) as number[];
+    const registered = JSON.parse(row.value) as number[];
+    return [...new Set([...registered, ...configured])];
   } catch {
-    return [];
+    return configured;
   }
 }
 
