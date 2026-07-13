@@ -4,5 +4,12 @@
 
 {$DOMAIN}, www.{$DOMAIN} {
 	encode zstd gzip
+
+	redir /agent /agent/ 308
+
+	handle_path /agent/* {
+		reverse_proxy backend-app:3010
+	}
+
 	reverse_proxy frontend:3000
 }

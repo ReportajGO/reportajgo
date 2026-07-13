@@ -11,6 +11,8 @@ const CRON_PRESETS = [
 ];
 const $ = (sel) => document.querySelector(sel);
 const el = (id) => document.getElementById(id);
+const scriptPath = new URL(document.currentScript?.src || window.location.href).pathname;
+const BASE_PATH = scriptPath.endsWith("/app.js") ? scriptPath.slice(0, -"/app.js".length) : "";
 
 let state = { status: null, tab: "PENDING_APPROVAL", topics: [] };
 
@@ -215,10 +217,16 @@ async function api(path, opts = {}) {
   // Always send X-Requested-With so the server's CSRF guard accepts the call;
   // a cross-site attacker can't set this header without a blocked CORS preflight.
   const headers = { "X-Requested-With": "XMLHttpRequest", ...(opts.headers || {}) };
-  const res = await fetch("/api" + path, { ...opts, headers });
+  const res = await fetch(`${BASE_PATH}/api${path}`, { ...opts, headers });
   const json = await res.json().catch(() => ({ ok: false, error: "bad response" }));
   if (!json.ok) throw new Error(json.error || `HTTP ${res.status}`);
   return json.data;
+}
+
+function mediaUrl(url) {
+  const value = String(url || "");
+  if (value.startsWith("/media/")) return `${BASE_PATH}${value}`;
+  return value;
 }
 
 // Only allow http(s) links in rendered hrefs — blocks javascript:/data: XSS from
@@ -432,8 +440,9 @@ async function saveSettings(btn) {
 function mediaEl(media) {
   const m = (media || [])[0];
   if (!m) return '<div class="nomedia">—</div>';
-  if (m.type === "VIDEO") return `<video src="${esc(m.url)}" controls muted loop></video>`;
-  return `<img src="${esc(m.url)}" alt="generated visual" class="zoomable" title="${t("zoomHint")}" />`;
+  const src = mediaUrl(m.url);
+  if (m.type === "VIDEO") return `<video src="${esc(src)}" controls muted loop></video>`;
+  return `<img src="${esc(src)}" alt="generated visual" class="zoomable" title="${t("zoomHint")}" />`;
 }
 
 // Full-size image viewer (lightbox). Click any card image to open.

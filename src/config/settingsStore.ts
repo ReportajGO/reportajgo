@@ -73,8 +73,9 @@ function envDefaults(): RuntimeConfig {
   };
 }
 
-// In-memory cache so hot paths (every Gemini call reads the model) never hit
-// the DB. Populated on first read, replaced on every save.
+// In-process snapshot of the last resolved config. We still refresh from the DB
+// on each read so separate app/worker/bot containers see dashboard edits without
+// a restart.
 let cache: RuntimeConfig | null = null;
 
 // Serializes read-modify-write of the shared config blob. Without it, a pause
@@ -128,9 +129,8 @@ function merge(base: RuntimeConfig, over: Partial<RuntimeConfig>): RuntimeConfig
   };
 }
 
-/** Resolved runtime config (DB overrides applied over env). Cached. */
+/** Resolved runtime config (DB overrides applied over env). */
 export async function getRuntimeConfig(): Promise<RuntimeConfig> {
-  if (cache) return cache;
   const resolved = merge(envDefaults(), await loadOverrides());
   cache = resolved;
   return resolved;
