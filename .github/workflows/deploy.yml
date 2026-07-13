@@ -76,6 +76,8 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.deploy-preflight.outputs.ready }}
     steps:
       - id: deploy-preflight
         env:
@@ -116,3 +118,41 @@ jobs:
             mv -f docker-compose.production.yml docker-compose.yml
             docker compose pull
             docker compose up -d --remove-orphans
+
+  cleanup-ghcr:
+    needs: deploy
+    if: needs.deploy.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete old GHCR image versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          KEEP_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          cleanup_package() {
+            local package_name="$1"
+            echo "Cleaning old versions for ${package_name}, keeping tag ${KEEP_TAG}"
+
+            mapfile -t version_ids < <(
+              gh api --paginate "/orgs/${OWNER}/packages/container/${package_name}/versions" \
+                --jq ".[] | select(((.metadata.container.tags // []) | index(\"${KEEP_TAG}\")) | not) | .id"
+            )
+
+            if [ "${#version_ids[@]}" -eq 0 ]; then
+              echo "No old versions to delete for ${package_name}"
+              return
+            fi
+
+            for version_id in "${version_ids[@]}"; do
+              echo "Deleting ${package_name} version ${version_id}"
+              gh api --method DELETE "/orgs/${OWNER}/packages/container/${package_name}/versions/${version_id}"
+            done
+          }
+
+          cleanup_package "reportajgo-backend"
+          cleanup_package "reportajgo-frontend"
