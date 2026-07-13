@@ -1,5 +1,6 @@
 import { env } from "../../config/env.js";
 import { hasRefreshToken } from "../../integrations/higgsfield/oauth.js";
+import { GeminiImageProvider } from "./geminiImage.js";
 import { HiggsfieldProvider } from "./higgsfield.js";
 import { HiggsfieldMcpProvider } from "./higgsfieldMcp.js";
 import type { MediaProvider } from "./provider.js";
@@ -18,7 +19,9 @@ let cached: MediaProvider | undefined;
 export function getMediaProvider(): MediaProvider {
   if (cached) return cached;
 
-  if (env.IMAGE_PROVIDER === "higgsfield-mcp") {
+  if (env.IMAGE_PROVIDER === "gemini") {
+    cached = new GeminiImageProvider();
+  } else if (env.IMAGE_PROVIDER === "higgsfield-mcp") {
     if (!hasRefreshToken()) {
       throw new Error(
         "IMAGE_PROVIDER=higgsfield-mcp but no refresh token — run `npm run higgsfield:login`.",
@@ -35,7 +38,7 @@ export function getMediaProvider(): MediaProvider {
     cached = new HiggsfieldProvider();
   } else {
     throw new Error(
-      `IMAGE_PROVIDER must be 'higgsfield-mcp' or 'higgsfield' (images are Higgsfield-only); got '${env.IMAGE_PROVIDER}'.`,
+      `IMAGE_PROVIDER must be 'gemini', 'higgsfield-mcp', or 'higgsfield'; got '${env.IMAGE_PROVIDER}'.`,
     );
   }
   return cached;
