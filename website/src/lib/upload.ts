@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { mkdir, writeFile, unlink } from "fs/promises";
 import path from "path";
 import { safeFetch } from "./ssrf";
+import { deleteS3Object, keyFromPublicUrl, putS3Object } from "./s3";
 
 // Where uploads land on disk and how they map to a public URL.
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
@@ -17,6 +18,15 @@ const EXT_BY_MIME: Record<string, string> = {
 };
 
 export class UploadError extends Error {}
+
+function shouldUseS3Storage(): boolean {
+  return (process.env.UPLOAD_STORAGE_DRIVER || "local") === "s3";
+}
+
+function s3Key(name: string): string {
+  const prefix = (process.env.AWS_S3_KEY_PREFIX || "uploads").replace(/^\/+|\/+$/g, "");
+  return prefix ? `${prefix}/${name}` : name;
+}
 
 /**
  * Verify the file's real content matches an allowed image format by inspecting
@@ -62,10 +72,13 @@ export async function saveImage(file: File): Promise<string> {
   const realType = sniffImage(buffer);
   if (!realType) throw new UploadError("File is not a valid image");
   const ext = EXT_BY_MIME[realType];
+  const name = `${randomUUID()}.${ext}`;
+  if (shouldUseS3Storage()) {
+    return putS3Object(s3Key(name), buffer, realType);
+  }
 
   await mkdir(UPLOAD_DIR, { recursive: true });
 
-  const name = `${randomUUID()}.${ext}`;
   await writeFile(path.join(UPLOAD_DIR, name), buffer);
 
   return `${PUBLIC_PREFIX}/${name}`;
@@ -98,9 +111,12 @@ export async function saveImageFromUrl(url: string): Promise<string> {
   const realType = sniffImage(buffer);
   if (!realType) throw new UploadError("URL did not return a supported image");
   const ext = EXT_BY_MIME[realType];
+  const name = `${randomUUID()}.${ext}`;
+  if (shouldUseS3Storage()) {
+    return putS3Object(s3Key(name), buffer, realType);
+  }
 
   await mkdir(UPLOAD_DIR, { recursive: true });
-  const name = `${randomUUID()}.${ext}`;
   await writeFile(path.join(UPLOAD_DIR, name), buffer);
   return `${PUBLIC_PREFIX}/${name}`;
 }
@@ -116,7 +132,18 @@ export async function saveImages(files: File[]): Promise<string[]> {
 
 /** Best-effort removal of a previously uploaded file (ignores misses). */
 export async function deleteImage(url: string | null | undefined): Promise<void> {
-  if (!url || !url.startsWith(`${PUBLIC_PREFIX}/`)) return;
+  if (!url) return;
+  if (!url.startsWith(`${PUBLIC_PREFIX}/`) && shouldUseS3Storage()) {
+    const key = keyFromPublicUrl(url);
+    if (!key) return;
+    try {
+      await deleteS3Object(key);
+    } catch {
+      // best-effort cleanup
+    }
+    return;
+  }
+  if (!url.startsWith(`${PUBLIC_PREFIX}/`)) return;
   const name = path.basename(url);
   try {
     await unlink(path.join(UPLOAD_DIR, name));

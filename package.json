@@ -9,6 +9,9 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
+    "start:app": "node dist/app.js",
+    "start:worker": "node dist/worker.js",
+    "start:bot": "node dist/bot.js",
     "build": "tsc -p tsconfig.json && node scripts/copy-public.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "worker": "tsx src/worker.ts",

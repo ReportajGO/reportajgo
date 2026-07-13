@@ -2,7 +2,7 @@
 // REAL photo from its source article (og:image / twitter:image), re-hosted
 // locally — no logo/headline overlay. Posts whose source has no usable image
 // are listed at the end (they need a generated fallback via the agent).
-//   DATABASE_URL="file:./dev.db" node scripts/regen-from-source.mjs
+//   DATABASE_URL="postgresql://reportajgo:reportajgo@localhost:5434/reportajgo_frontend?schema=public" node scripts/regen-from-source.mjs
 import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";

@@ -1,7 +1,7 @@
 // One-off: re-host agent post images that point at an external host
 // (http://localhost:3010/media/...) into local /uploads so they pass the site
 // CSP and display. Run from the website dir:
-//   DATABASE_URL="file:./dev.db" node scripts/rehost-images.mjs
+//   DATABASE_URL="postgresql://reportajgo:reportajgo@localhost:5434/reportajgo_frontend?schema=public" node scripts/rehost-images.mjs
 import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";

@@ -77,6 +77,15 @@ async function contentCounts() {
   };
 }
 
+export async function getHealth() {
+  const [postgres, redis] = await Promise.all([checkPostgres(), checkRedis()]);
+  return {
+    ok: postgres.ok && redis.ok,
+    postgres,
+    redis,
+  };
+}
+
 function integrations() {
   return {
     gemini: { configured: Boolean(env.GEMINI_API_KEY), editable: false },

@@ -1,12 +1,12 @@
 // ReportajGO — Prisma schema
-// SQLite for local dev; switch provider to "postgresql" for production.
+// PostgreSQL for production and Docker-based local development.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

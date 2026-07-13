@@ -1,0 +1,143 @@
+services:
+  backend-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reportajgo
+      POSTGRES_PASSWORD: ${BACKEND_POSTGRES_PASSWORD}
+      POSTGRES_DB: reportajgo_backend
+    volumes:
+      - backend_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reportajgo -d reportajgo_backend"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  frontend-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reportajgo
+      POSTGRES_PASSWORD: ${FRONTEND_POSTGRES_PASSWORD}
+      POSTGRES_DB: reportajgo_frontend
+    volumes:
+      - frontend_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reportajgo -d reportajgo_frontend"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend-app:
+    image: ghcr.io/reportajgo/reportajgo-backend:latest
+    restart: unless-stopped
+    env_file:
+      - ./backend.env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://reportajgo:${BACKEND_POSTGRES_PASSWORD}@backend-postgres:5432/reportajgo_backend?schema=public
+      REDIS_URL: redis://redis:6379
+      DASHBOARD_BIND: 0.0.0.0
+      WEBSITE_API_URL: http://frontend:3000
+    command: sh -c "npx prisma migrate deploy && npm run start:app"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const p=process.env.DASHBOARD_PORT||3010;fetch('http://127.0.0.1:'+p+'/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    depends_on:
+      backend-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  backend-worker:
+    image: ghcr.io/reportajgo/reportajgo-backend:latest
+    restart: unless-stopped
+    env_file:
+      - ./backend.env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://reportajgo:${BACKEND_POSTGRES_PASSWORD}@backend-postgres:5432/reportajgo_backend?schema=public
+      REDIS_URL: redis://redis:6379
+      WEBSITE_API_URL: http://frontend:3000
+    command: npm run start:worker
+    depends_on:
+      backend-app:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  telegram-bot:
+    image: ghcr.io/reportajgo/reportajgo-backend:latest
+    restart: unless-stopped
+    env_file:
+      - ./backend.env
+      - ./bot.env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://reportajgo:${BACKEND_POSTGRES_PASSWORD}@backend-postgres:5432/reportajgo_backend?schema=public
+      REDIS_URL: redis://redis:6379
+      WEBSITE_API_URL: http://frontend:3000
+    command: npm run start:bot
+    depends_on:
+      backend-app:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/reportajgo/reportajgo-frontend:latest
+    restart: unless-stopped
+    env_file:
+      - ./frontend.env
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: postgresql://reportajgo:${FRONTEND_POSTGRES_PASSWORD}@frontend-postgres:5432/reportajgo_frontend?schema=public
+    command: sh -c "npx prisma migrate deploy && npm run start"
+    depends_on:
+      frontend-postgres:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-reportajgo.uz}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+volumes:
+  backend_pgdata:
+  frontend_pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

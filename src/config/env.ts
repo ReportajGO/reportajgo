@@ -10,6 +10,11 @@ const csv = (val: string | undefined): string[] =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+const optionalUrl = z.preprocess(
+  (val) => (val === "" ? undefined : val),
+  z.string().url().optional(),
+);
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
@@ -33,6 +38,18 @@ const schema = z.object({
   // Where generated images are written, and the base URL they're served from.
   MEDIA_DIR: z.string().default("media"),
   PUBLIC_BASE_URL: z.string().optional(),
+  MEDIA_STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
+  AWS_REGION: z.string().default("us-east-1"),
+  AWS_S3_BUCKET: z.string().optional(),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  AWS_S3_ENDPOINT: optionalUrl,
+  AWS_S3_FORCE_PATH_STYLE: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
+  AWS_S3_PUBLIC_BASE_URL: optionalUrl,
+  AWS_S3_KEY_PREFIX: z.string().default("media"),
 
   // Brand card template: folder holding logo.png + headline font, and the
   // accent color for the red bar / fallbacks. The renderer overlays the logo,
@@ -123,6 +140,9 @@ const schema = z.object({
   // Path appended to the tunnel origin (default locale is "ru", admin at /ru/admin).
   WEBAPP_PATH: z.string().default("/ru/admin"),
   WEBAPP_MENU_TEXT: z.string().default("Admin Panel"),
+  // Production direct Mini App URL. When set, the bot points its menu button at
+  // this URL and does not start a cloudflared quick tunnel.
+  WEBAPP_PUBLIC_URL: optionalUrl,
   // Optional explicit path to the cloudflared binary; defaults to ./bin/cloudflared(.exe)
   // then a PATH lookup.
   CLOUDFLARED_PATH: z.string().optional(),
@@ -209,6 +229,19 @@ if (!parsed.success) {
 }
 
 const raw = parsed.data;
+
+if (raw.MEDIA_STORAGE_DRIVER === "s3") {
+  const missing = [
+    ["AWS_S3_BUCKET", raw.AWS_S3_BUCKET],
+    ["AWS_ACCESS_KEY_ID", raw.AWS_ACCESS_KEY_ID],
+    ["AWS_SECRET_ACCESS_KEY", raw.AWS_SECRET_ACCESS_KEY],
+  ]
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+  if (missing.length) {
+    throw new Error(`Invalid environment configuration:\n  - ${missing.join(", ")} required when MEDIA_STORAGE_DRIVER=s3`);
+  }
+}
 
 const VALID_PLATFORMS = [
   "TELEGRAM",

@@ -1,0 +1,118 @@
+name: Monorepo CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  BACKEND_IMAGE: ghcr.io/reportajgo/reportajgo-backend
+  FRONTEND_IMAGE: ghcr.io/reportajgo/reportajgo-frontend
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://reportajgo:reportajgo@localhost:5432/reportajgo_backend?schema=public
+      - run: npm run typecheck
+      - run: npm run build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - working-directory: website
+        run: npm ci
+      - working-directory: website
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://reportajgo:reportajgo@localhost:5432/reportajgo_frontend?schema=public
+      - working-directory: website
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://reportajgo:reportajgo@localhost:5432/reportajgo_frontend?schema=public
+          NEXTAUTH_SECRET: build-time-placeholder
+          NEXTAUTH_URL: http://localhost:3000
+          AGENT_API_KEY: build-time-placeholder
+
+  build-and-push:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: website
+          file: website/Dockerfile
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - id: deploy-preflight
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          if [ -n "$VPS_HOST" ] && [ -n "$VPS_USER" ] && [ -n "$VPS_SSH_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skipping deploy because VPS_HOST, VPS_USER, or VPS_SSH_KEY is not configured."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.deploy-preflight.outputs.ready == 'true'
+      - uses: appleboy/scp-action@v0.1.7
+        if: steps.deploy-preflight.outputs.ready == 'true'
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          source: "docker-compose.production.yml,Caddyfile"
+          target: "/opt/reportajgo"
+      - uses: appleboy/ssh-action@v1.2.0
+        if: steps.deploy-preflight.outputs.ready == 'true'
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          script: |
+            cd /opt/reportajgo
+            test -f .env
+            test -f backend.env
+            test -f frontend.env
+            test -f bot.env
+            mv -f docker-compose.production.yml docker-compose.yml
+            docker compose pull
+            docker compose up -d --remove-orphans

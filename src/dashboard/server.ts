@@ -8,6 +8,7 @@ import type { Server } from "node:http";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { MEDIA_ROOT } from "../generate/media/mediaStore.js";
+import { getHealth } from "./controlService.js";
 import { dashboardAuth } from "./auth.js";
 import { api } from "./routes.js";
 
@@ -66,6 +67,10 @@ export function startDashboard(): Server {
   const publicDir = join(__dirname, "public");
   app.get("/favicon.ico", (_req, res) => res.sendFile(join(publicDir, "favicon.ico")));
   app.get("/icon.png", (_req, res) => res.sendFile(join(publicDir, "icon.png")));
+  app.get("/healthz", async (_req, res) => {
+    const health = await getHealth();
+    res.status(health.ok ? 200 : 503).json(health);
+  });
   // Brute-force protection: cap requests per IP before the credential check so a
   // weak password can't be guessed at speed. Generous enough for normal UI use.
   const limiter = rateLimit({

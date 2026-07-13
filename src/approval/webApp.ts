@@ -49,6 +49,14 @@ export function startWebApp(bot: Telegraf): { stop: () => void } | undefined {
     return undefined;
   }
 
+  if (env.WEBAPP_PUBLIC_URL) {
+    void setMenuButton(bot, env.WEBAPP_PUBLIC_URL).catch((err) =>
+      log.error({ err }, "failed to set telegram menu button"),
+    );
+    log.info({ url: env.WEBAPP_PUBLIC_URL }, "using direct Telegram Mini App URL");
+    return { stop: () => {} };
+  }
+
   const bin = resolveCloudflared();
   const target = env.WEBSITE_API_URL.replace(/\/$/, "");
   const path = env.WEBAPP_PATH.startsWith("/") ? env.WEBAPP_PATH : `/${env.WEBAPP_PATH}`;
