@@ -1,5 +1,8 @@
+import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { prisma } from "../db/client.js";
+import { profileFor } from "../domain/platforms.js";
+import type { Platform } from "../domain/types.js";
 
 const log = logger.child({ module: "approval" });
 
@@ -38,6 +41,9 @@ export async function approveDraft(draftId: string, input: ApproveInput) {
 
   const draft = await prisma.postDraft.findUnique({ where: { id: draftId } });
   if (!draft) throw new Error("draft not found");
+  if (!env.MEDIA_GENERATION_ENABLED && profileFor(draft.platform as Platform).mediaRequired) {
+    throw new Error(`${draft.platform} requires media and cannot publish in text-only mode`);
+  }
 
   const approvedAt = new Date();
 
@@ -96,7 +102,11 @@ export async function approveDraft(draftId: string, input: ApproveInput) {
   });
   let scheduledSiblings = 0;
   for (const sib of siblings) {
-    if (sib.media.length === 0) {
+    if (!env.MEDIA_GENERATION_ENABLED && profileFor(sib.platform as Platform).mediaRequired) {
+      log.warn({ siblingId: sib.id, platform: sib.platform }, "sibling requires media; skipping in text-only mode");
+      continue;
+    }
+    if (env.MEDIA_GENERATION_ENABLED && sib.media.length === 0) {
       log.warn({ siblingId: sib.id, platform: sib.platform }, "sibling has no ready media; skipping");
       continue;
     }
@@ -138,7 +148,7 @@ export async function restoreDraft(draftId: string) {
   if (!draft) throw new Error("draft not found");
 
   const hasReadyMedia = draft.media.some((m) => m.status === "READY" && m.url);
-  const next = hasReadyMedia ? "PENDING_APPROVAL" : "PENDING_MEDIA";
+  const next = !env.MEDIA_GENERATION_ENABLED || hasReadyMedia ? "PENDING_APPROVAL" : "PENDING_MEDIA";
 
   const updated = await prisma.postDraft.update({
     where: { id: draftId },

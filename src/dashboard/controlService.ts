@@ -2,6 +2,8 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { getRuntimeConfig } from "../config/settingsStore.js";
 import { prisma } from "../db/client.js";
+import { profileFor } from "../domain/platforms.js";
+import type { Platform } from "../domain/types.js";
 import { pipelineQueue, publishQueue, schedulerQueue } from "../queue/queues.js";
 import { isResearchCronActive } from "../queue/schedule.js";
 import { approveDraft } from "./approvalService.js";
@@ -165,6 +167,7 @@ export async function publishAllPending(
     select: {
       id: true,
       newsItemId: true,
+      platform: true,
       media: { where: { status: "READY", url: { not: null } }, select: { id: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -174,7 +177,13 @@ export async function publishAllPending(
   // to the item's other platform drafts automatically.
   const byItem = new Map<string, string>();
   for (const d of pending) {
-    if (d.media.length > 0 && !byItem.has(d.newsItemId)) byItem.set(d.newsItemId, d.id);
+    const canPublishTextOnly = !profileFor(d.platform as Platform).mediaRequired;
+    if (
+      ((!env.MEDIA_GENERATION_ENABLED && canPublishTextOnly) || d.media.length > 0) &&
+      !byItem.has(d.newsItemId)
+    ) {
+      byItem.set(d.newsItemId, d.id);
+    }
   }
 
   const now = new Date().toISOString();

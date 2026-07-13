@@ -5,6 +5,7 @@ import { logger } from "../config/logger.js";
 import { prisma } from "../db/client.js";
 import { approveDraft, rejectDraft } from "../dashboard/approvalService.js";
 import { scanNow } from "../dashboard/controlService.js";
+import { platformsWithoutRequiredMedia } from "../domain/platforms.js";
 import { MEDIA_ROOT } from "../generate/media/mediaStore.js";
 import {
   getPublishState,
@@ -130,9 +131,14 @@ async function sendApprovalMessage(chatId: number, draft: DraftForApproval): Pro
 async function sweep(): Promise<void> {
   const approvers = await getApproverChats();
   if (approvers.length === 0) return;
+  const textOnlyPlatforms = platformsWithoutRequiredMedia();
 
   const drafts = (await prisma.postDraft.findMany({
-    where: { status: "PENDING_APPROVAL", approvalSentAt: null },
+    where: {
+      status: "PENDING_APPROVAL",
+      approvalSentAt: null,
+      ...(!env.MEDIA_GENERATION_ENABLED ? { platform: { in: textOnlyPlatforms } } : {}),
+    },
     include: {
       media: { where: { status: "READY" }, select: { type: true, url: true } },
       newsItem: { select: { sourceName: true, sourceUrl: true } },
@@ -165,7 +171,7 @@ async function sweep(): Promise<void> {
   // without its media.
   for (const rep of byNews.values()) {
     const media = mediaByNews.get(rep.newsItemId) ?? [];
-    if (media.length === 0) continue; // this item has no ready media yet
+    if (env.MEDIA_GENERATION_ENABLED && media.length === 0) continue; // this item has no ready media yet
     // Show the Reel (video) when the item has one; keep the rep's headline/text.
     const draft = { ...rep, media };
     try {

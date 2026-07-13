@@ -63,7 +63,7 @@ export const PLATFORM_PROFILES: Record<Platform, PlatformProfile> = {
       "attribution. Neutral, journalistic, well-structured. No emoji.",
     hashtagCount: 0,
     media: { type: "IMAGE", aspectRatio: "16:9" },
-    mediaRequired: true,
+    mediaRequired: false,
   },
   YOUTUBE: {
     platform: "YOUTUBE",
@@ -80,4 +80,10 @@ export const PLATFORM_PROFILES: Record<Platform, PlatformProfile> = {
 
 export function profileFor(platform: Platform): PlatformProfile {
   return PLATFORM_PROFILES[platform];
+}
+
+export function platformsWithoutRequiredMedia(): Platform[] {
+  return Object.values(PLATFORM_PROFILES)
+    .filter((profile) => !profile.mediaRequired)
+    .map((profile) => profile.platform);
 }

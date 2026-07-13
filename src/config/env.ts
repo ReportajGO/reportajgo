@@ -34,6 +34,10 @@ const schema = z.object({
   //  - "higgsfield": Higgsfield REST API (separate API credit wallet).
   //  - "gemini": Gemini image model, stored locally.
   IMAGE_PROVIDER: z.enum(["gemini", "higgsfield", "higgsfield-mcp"]).default("gemini"),
+  MEDIA_GENERATION_ENABLED: z
+    .string()
+    .default("true")
+    .transform((v) => !["false", "0", "no"].includes(v.trim().toLowerCase())),
   GEMINI_IMAGE_MODEL: z.string().default("gemini-2.5-flash-image"),
   // Where generated images are written, and the base URL they're served from.
   MEDIA_DIR: z.string().default("media"),

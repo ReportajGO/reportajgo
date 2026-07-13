@@ -54,21 +54,14 @@ export class WebsitePublisher implements Publisher {
   async publish(input: PublishInput): Promise<PublishResult> {
     const a = input.article;
     if (!a) throw new Error("WEBSITE publish requires article metadata");
-
-    // Strict: every website article MUST carry its generated photo. If the
-    // image isn't ready, refuse to publish (the post stays unpublished and can
-    // be retried once media is ready) rather than posting a text-only article.
     const image = input.media.find((m) => m.type === "IMAGE" && m.url);
-    if (!image) {
-      throw new Error("WEBSITE publish requires a ready image; none found — not posting text-only");
-    }
     const payload = {
       title: a.title,
       excerpt: a.excerpt,
       content: input.body,
       category: articleTheme(a.topic),
       language: mapLanguage(a.language),
-      imageUrl: absoluteUrl(image.url),
+      ...(image?.url ? { imageUrl: absoluteUrl(image.url) } : {}),
       source: a.source,
       sourceUrl: a.sourceUrl,
       dedupeKey: a.dedupeKey,

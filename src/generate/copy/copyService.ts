@@ -1,3 +1,4 @@
+import { env } from "../../config/env.js";
 import { getRuntimeConfig } from "../../config/settingsStore.js";
 import { logger } from "../../config/logger.js";
 import { prisma } from "../../db/client.js";
@@ -98,7 +99,10 @@ async function createDraftsForItem(
   } catch (err) {
     log.warn({ err, newsId: news.id }, "card headline generation failed; will fall back to title");
   }
-  for (const platform of platforms) {
+  const targetPlatforms = env.MEDIA_GENERATION_ENABLED
+    ? platforms
+    : platforms.filter((platform) => !profileFor(platform as Platform).mediaRequired);
+  for (const platform of targetPlatforms) {
     try {
       const copy = await generateCopy(news, platform as Platform, language);
       await prisma.postDraft.create({

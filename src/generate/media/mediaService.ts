@@ -1,7 +1,7 @@
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { prisma } from "../../db/client.js";
-import { profileFor } from "../../domain/platforms.js";
+import { platformsWithoutRequiredMedia, profileFor } from "../../domain/platforms.js";
 import type { AspectRatio, Platform } from "../../domain/types.js";
 import type { MediaResult } from "../../domain/types.js";
 import { imageHasText } from "../../research/gemini.js";
@@ -178,6 +178,20 @@ export async function generateMediaForPendingDrafts(opts?: {
   ready: number;
   failed: number;
 }> {
+  if (!env.MEDIA_GENERATION_ENABLED) {
+    const textOnlyPlatforms = platformsWithoutRequiredMedia();
+    const promoted = await prisma.postDraft.updateMany({
+      where: {
+        status: "PENDING_MEDIA",
+        platform: { in: textOnlyPlatforms },
+        ...(opts?.newsItemId ? { newsItemId: opts.newsItemId } : {}),
+      },
+      data: { status: "PENDING_APPROVAL" },
+    });
+    log.info({ ready: promoted.count, failed: 0 }, "media generation disabled; promoted drafts to approval");
+    return { ready: promoted.count, failed: 0 };
+  }
+
   const drafts = await prisma.postDraft.findMany({
     where: {
       status: "PENDING_MEDIA",

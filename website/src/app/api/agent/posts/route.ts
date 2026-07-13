@@ -117,12 +117,8 @@ export async function POST(req: Request) {
       { error: "Missing required fields: title, excerpt, content" },
       { status: 400 },
     );
-  // Strict: agent articles must always include a photo.
-  if (!imageUrl || typeof imageUrl !== "string" || !imageUrl.trim())
-    return NextResponse.json(
-      { error: "Missing required field: imageUrl (every post must have a photo)" },
-      { status: 400 },
-    );
+  if (imageUrl !== undefined && (typeof imageUrl !== "string" || !imageUrl.trim()))
+    return NextResponse.json({ error: "Invalid imageUrl" }, { status: 400 });
   // Themes are dynamic now: any non-empty slug is accepted and created on the
   // fly if the theme sync hasn't reached us yet (connectOrCreate below).
   if (!isCategory(category))
@@ -139,14 +135,17 @@ export async function POST(req: Request) {
     }
   }
 
-  // Re-host the agent's image locally so it's served same-origin (the agent
-  // serves media on another host/port over http, which the site CSP blocks).
-  // Falls back to the original URL if the download fails.
-  let localImageUrl = imageUrl as string;
-  try {
-    localImageUrl = await saveImageFromUrl(imageUrl);
-  } catch (err) {
-    console.error("[agent] image re-host failed; using remote URL:", err);
+  let localImageUrl: string | null = null;
+  if (typeof imageUrl === "string" && imageUrl.trim()) {
+    // Re-host the agent's image locally so it's served same-origin (the agent
+    // serves media on another host/port over http, which the site CSP blocks).
+    // Falls back to the original URL if the download fails.
+    localImageUrl = imageUrl;
+    try {
+      localImageUrl = await saveImageFromUrl(imageUrl);
+    } catch (err) {
+      console.error("[agent] image re-host failed; using remote URL:", err);
+    }
   }
 
   // Translate into all site languages so the post shows on every locale.
