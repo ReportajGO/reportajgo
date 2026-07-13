@@ -11,6 +11,10 @@ import { themeSlug } from "../domain/themes.js";
 
 const log = logger.child({ module: "publish:themes" });
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Sync the website's themes to the given topic filters. Never throws. */
 export async function syncThemesToWebsite(topics: string[]): Promise<void> {
   if (!env.WEBSITE_API_KEY) {
@@ -28,23 +32,29 @@ export async function syncThemesToWebsite(topics: string[]): Promise<void> {
   if (themes.length === 0) return;
 
   const endpoint = `${env.WEBSITE_API_URL.replace(/\/+$/, "")}/api/agent/themes`;
-  try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${env.WEBSITE_API_KEY}`,
-      },
-      body: JSON.stringify({ themes }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) {
-      log.warn({ status: res.status, data }, "theme sync failed");
-      return;
+  const attempts = 6;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${env.WEBSITE_API_KEY}`,
+        },
+        body: JSON.stringify({ themes }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        log.warn({ status: res.status, data, attempt, attempts }, "theme sync failed");
+      } else {
+        log.info({ count: themes.length, ...data }, "themes synced to website");
+        return;
+      }
+    } catch (err) {
+      log.warn({ err, attempt, attempts }, "theme sync request error");
     }
-    log.info({ count: themes.length, ...data }, "themes synced to website");
-  } catch (err) {
-    log.warn({ err }, "theme sync request error");
+
+    if (attempt < attempts) await sleep(attempt * 2_000);
   }
 }
