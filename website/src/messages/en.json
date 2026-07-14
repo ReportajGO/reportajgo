@@ -110,7 +110,8 @@
       "newPost": "New post",
       "sections": "Sections",
       "settings": "Settings",
-      "menu": "Menu"
+      "menu": "Menu",
+      "ads": "Ads"
     },
     "stats": {
       "total": "Total posts",
@@ -196,6 +197,45 @@
       "results": "{n} of {total}",
       "noMatches": "No posts match your filters",
       "reset": "Reset"
+    },
+    "ads": {
+      "title": "Ads",
+      "new": "New ad",
+      "edit": "Edit ad",
+      "empty": "No ads yet — create one to fill a slot.",
+      "desc": "Upload banner creatives and assign each to a slot on the site. Only published ads within their schedule are shown to visitors.",
+      "imageRequired": "An ad image is required",
+      "fields": {
+        "title": "Title (internal)",
+        "titleHint": "Only shown here in the admin, e.g. \"Coca-Cola July banner\"",
+        "slot": "Placement",
+        "image": "Creative image",
+        "link": "Click-through URL",
+        "linkHint": "Where the ad links when clicked. Leave empty for a non-clickable banner.",
+        "order": "Priority",
+        "orderHint": "Lower shows first when several ads share a slot.",
+        "published": "Published (live on the site)",
+        "startsAt": "Starts (optional)",
+        "endsAt": "Ends (optional)",
+        "scheduleHint": "Leave blank to run immediately and never expire."
+      },
+      "slots": {
+        "topLeaderboard": "Top banner (all pages)",
+        "homeRectangle": "Home sidebar box",
+        "homeBanner": "Home in-feed banner",
+        "categoryRectangle": "Section sidebar box",
+        "articleBanner": "In-article banner"
+      },
+      "status": {
+        "live": "Live",
+        "hidden": "Hidden",
+        "scheduled": "Scheduled",
+        "expired": "Expired"
+      },
+      "actions": {
+        "publish": "Publish",
+        "unpublish": "Unpublish"
+      }
     }
   }
 }

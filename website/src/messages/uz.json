@@ -110,7 +110,8 @@
       "newPost": "Yangi maqola",
       "sections": "Bo‘limlar",
       "settings": "Sozlamalar",
-      "menu": "Menyu"
+      "menu": "Menyu",
+      "ads": "Reklama"
     },
     "stats": {
       "total": "Jami",
@@ -196,6 +197,45 @@
       "results": "{total} tadan {n} ta",
       "noMatches": "Filtrlarga mos post yoʻq",
       "reset": "Tozalash"
+    },
+    "ads": {
+      "title": "Reklama",
+      "new": "Yangi banner",
+      "edit": "Bannerni tahrirlash",
+      "empty": "Hozircha reklama yo‘q — slot uchun banner yarating.",
+      "desc": "Banner rasmlarini yuklang va har birini saytdagi joyga biriktiring. Tashrifchilarga faqat jadval doirasidagi chop etilgan reklamalar ko‘rsatiladi.",
+      "imageRequired": "Banner rasmi kerak",
+      "fields": {
+        "title": "Nomi (ichki)",
+        "titleHint": "Faqat shu yerda, admin panelida ko‘rinadi, masalan «Coca-Cola iyul banneri»",
+        "slot": "Joylashuv",
+        "image": "Banner rasmi",
+        "link": "O‘tish havolasi",
+        "linkHint": "Bannerga bosilganda qayerga o‘tadi. Bosilmaydigan banner uchun bo‘sh qoldiring.",
+        "order": "Ustuvorlik",
+        "orderHint": "Bitta slotda bir nechta banner bo‘lsa, kichigi oldin ko‘rsatiladi.",
+        "published": "Chop etilgan (saytda ko‘rsatilsin)",
+        "startsAt": "Boshlanishi (ixtiyoriy)",
+        "endsAt": "Tugashi (ixtiyoriy)",
+        "scheduleHint": "Darhol ishga tushirish va muddatsiz uchun bo‘sh qoldiring."
+      },
+      "slots": {
+        "topLeaderboard": "Yuqori banner (barcha sahifalar)",
+        "homeRectangle": "Bosh sahifa yon ustun bloki",
+        "homeBanner": "Bosh sahifa lentadagi banner",
+        "categoryRectangle": "Bo‘lim yon ustun bloki",
+        "articleBanner": "Maqola ichidagi banner"
+      },
+      "status": {
+        "live": "Faol",
+        "hidden": "Yashirin",
+        "scheduled": "Rejalashtirilgan",
+        "expired": "Muddati tugagan"
+      },
+      "actions": {
+        "publish": "Chop etish",
+        "unpublish": "Yashirish"
+      }
     }
   }
 }

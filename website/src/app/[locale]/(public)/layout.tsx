@@ -29,7 +29,7 @@ export default async function PublicLayout({
       </div>
       {/* Top leaderboard ad — visible on every page, both versions. */}
       <div className="mx-auto max-w-page px-4 pt-4 sm:px-[22px]">
-        <AdSlot variant="leaderboard" />
+        <AdSlot slot="top-leaderboard" />
       </div>
       <main className="mx-auto min-h-[60vh] max-w-page px-[22px]">
         {children}

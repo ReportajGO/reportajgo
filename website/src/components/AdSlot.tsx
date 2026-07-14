@@ -1,58 +1,54 @@
-import { getServerSession } from "next-auth";
+import Image from "next/image";
 import { getTranslations } from "next-intl/server";
-import { authOptions } from "@/lib/auth";
+import { getAdForSlot } from "@/lib/ads";
+import { adSlotDef, AD_FORMAT_SIZE } from "@/lib/adSlots";
 
 /**
- * Master switch for live ad slots. While `false`, regular visitors see nothing
- * (placements stay in the page), but a logged-in admin still sees the labelled
- * placeholders to preview where ads will appear. Flip to `true` (or drop in a
- * real ad tag) when ads go live for everyone.
- */
-const ADS_ENABLED = false;
-
-/**
- * Reusable advertising placeholder. Drop it anywhere a banner/box should go;
- * swap the inner markup for a real ad tag (AdSense, GAM, direct creative)
- * later — the sizing wrapper stays the same.
- *
- * Variants map to common ad formats and stay responsive:
- * - "leaderboard" → tall mobile banner → wide leaderboard on desktop
- * - "banner"      → in-feed / in-article horizontal strip
- * - "rectangle"   → 300×250-style box (sidebars)
+ * Public advertising slot. Renders the active published creative for `slot`
+ * (see lib/adSlots.ts), managed from the admin panel (/admin/ads). When no ad
+ * qualifies — none published, or outside its schedule — the slot renders
+ * nothing, so empty placements simply disappear from the page.
  */
 export default async function AdSlot({
-  variant = "banner",
+  slot,
   className = "",
 }: {
-  variant?: "leaderboard" | "banner" | "rectangle";
+  slot: string;
   className?: string;
 }) {
-  // Hidden from the public until ads go live — but admins still preview them.
-  if (!ADS_ENABLED) {
-    const session = await getServerSession(authOptions);
-    if (!session) return null;
-  }
+  const ad = await getAdForSlot(slot);
+  if (!ad) return null;
 
+  const def = adSlotDef(slot);
+  const size = def ? AD_FORMAT_SIZE[def.format] : AD_FORMAT_SIZE.banner;
   const t = await getTranslations("ads");
 
-  const size =
-    variant === "leaderboard"
-      ? "h-[100px] sm:h-[90px]"
-      : variant === "rectangle"
-        ? "h-[250px]"
-        : "h-[110px] sm:h-[130px]";
+  const media = (
+    <div className={`relative w-full overflow-hidden rounded-xl bg-bg-sub ${size}`}>
+      <Image
+        src={ad.imageUrl}
+        alt={ad.title || t("label")}
+        fill
+        sizes="(max-width: 640px) 100vw, 728px"
+        className="object-contain"
+      />
+    </div>
+  );
 
   return (
-    <aside
-      aria-label={t("label")}
-      className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line bg-bg-sub text-ink-soft ${size} ${className}`}
-    >
-      <span className="font-display text-[10px] font-bold uppercase tracking-[.22em]">
-        {t("label")}
-      </span>
-      <span className="font-mono text-[11px] opacity-50">
-        {ADS_ENABLED ? "320×100 · 728×90" : "превью · видно только админу"}
-      </span>
+    <aside aria-label={t("label")} className={`w-full ${className}`}>
+      {ad.linkUrl ? (
+        <a
+          href={ad.linkUrl}
+          target="_blank"
+          rel="noopener noreferrer sponsored"
+          className="block transition-opacity hover:opacity-95"
+        >
+          {media}
+        </a>
+      ) : (
+        media
+      )}
     </aside>
   );
 }

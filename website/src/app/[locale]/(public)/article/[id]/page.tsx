@@ -139,7 +139,7 @@ export default async function ArticlePage({
         )}
 
         {/* In-article ad */}
-        <AdSlot variant="banner" className="my-7" />
+        <AdSlot slot="article-banner" className="my-7" />
 
         <ShareBar
           title={post.title}

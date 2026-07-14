@@ -58,7 +58,7 @@ export default async function CategoryPage({
                     <SideItem key={p.id} post={p} />
                   ))}
                 </div>
-                <AdSlot variant="rectangle" className="mt-5" />
+                <AdSlot slot="category-rectangle" className="mt-5" />
               </aside>
             )}
           </div>

@@ -53,12 +53,12 @@ export default async function HomePage({
               <SideItem key={p.id} post={p} />
             ))}
           </div>
-          <AdSlot variant="rectangle" className="mt-5" />
+          <AdSlot slot="home-rectangle" className="mt-5" />
         </aside>
       </div>
 
       {/* In-feed ad banner */}
-      <AdSlot variant="banner" className="mt-9" />
+      <AdSlot slot="home-banner" className="mt-9" />
 
       {/* Latest */}
       <div className="mb-4 mt-9 flex items-center justify-between">

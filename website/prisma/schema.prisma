@@ -82,3 +82,31 @@ model Post {
   @@index([language, categoryId])
   @@index([createdAt])
 }
+
+// A banner advertisement managed from the admin panel. Each ad targets one named
+// on-page slot (see lib/adSlots.ts) and renders as an image that optionally links
+// out. A slot shows its highest-priority published ad that is within its optional
+// schedule window; when none qualifies, the slot renders nothing (no placeholder).
+model Ad {
+  id        String  @id @default(cuid())
+  // Internal label shown only in the admin list (not on the public site).
+  title     String
+  // Which on-page placement this ad fills, e.g. "home-banner" (lib/adSlots.ts).
+  slot      String
+  // Creative image (uploaded to /uploads or an S3 URL). Required.
+  imageUrl  String
+  // Optional click-through URL. When set, the creative links out (new tab).
+  linkUrl   String?
+  // Live toggle. Only published ads (in-window) are shown to the public.
+  published Boolean @default(false)
+  // Priority when several ads target the same slot: lower shows first.
+  order     Int     @default(100)
+  // Optional flight window. null start = live now; null end = never expires.
+  startsAt  DateTime?
+  endsAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slot, published, order])
+}

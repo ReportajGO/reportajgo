@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 
-type NavKey = "dashboard" | "newPost" | "sections" | "settings";
+type NavKey = "dashboard" | "newPost" | "sections" | "ads" | "settings";
 
 const ITEMS: { key: NavKey; href: string; icon: React.ReactNode }[] = [
   {
@@ -25,6 +25,13 @@ const ITEMS: { key: NavKey; href: string; icon: React.ReactNode }[] = [
     href: "/admin/sections",
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5Z" /><path d="M3 12l9 5 9-5M3 17l9 5 9-5" /></svg>
+    ),
+  },
+  {
+    key: "ads",
+    href: "/admin/ads",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 14v-3Z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></svg>
     ),
   },
   {
