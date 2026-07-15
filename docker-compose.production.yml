@@ -80,6 +80,13 @@ services:
       DATABASE_URL: postgresql://reportajgo:${BACKEND_POSTGRES_PASSWORD}@backend-postgres:5432/reportajgo_backend?schema=public
       REDIS_URL: redis://redis:6379
       WEBSITE_API_URL: http://frontend:3000
+    # Higgsfield OAuth token store. Media generation runs only in this worker; the
+    # token file is gitignored and not baked into the image, so mount it here (RW so
+    # rotated refresh tokens persist). Create <deploy>/.secrets/higgsfield-oauth.json
+    # by copying it from your dev machine. Env-var auth (HIGGSFIELD_CLIENT_ID /
+    # HIGGSFIELD_REFRESH_TOKEN in backend.env) is an alternative to this mount.
+    volumes:
+      - ./.secrets:/app/.secrets
     command: npm run start:worker
     depends_on:
       backend-app:
