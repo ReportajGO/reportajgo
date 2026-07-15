@@ -90,9 +90,11 @@ services:
     volumes:
       - ./.secrets:/app/.secrets
       - ./.instagram-profile:/app/.instagram-profile
-    # xvfb-run gives the headed Instagram Chromium a virtual display (24-bit) so it
-    # can open, post, and close on the headless server.
-    command: ["sh", "-c", "xvfb-run -a --server-args='-screen 0 1920x1080x24' npm run start:worker"]
+    # Start a virtual display (24-bit) for the headed Instagram Chromium, then run
+    # the worker. Xvfb -ac disables X access control so no xauth is needed, and it's
+    # best-effort (backgrounded) — if the display can't start, the worker still runs
+    # (only Instagram web posting needs it; media gen + Telegram + website don't).
+    command: ["sh", "-c", "(Xvfb :99 -screen 0 1920x1080x24 -ac -nolisten tcp >/tmp/xvfb.log 2>&1 &) ; export DISPLAY=:99 ; exec npm run start:worker"]
     depends_on:
       backend-app:
         condition: service_healthy

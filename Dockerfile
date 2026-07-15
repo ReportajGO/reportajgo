@@ -22,7 +22,7 @@ ENV NODE_ENV=production
 #   without it the slim image has no fonts and the card headline renders blank.
 # xvfb: virtual display so the Instagram "web" publisher can run a headed Chromium
 #   (open → post → close, like a human) on the headless server.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl fonts-dejavu-core xvfb && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl fonts-dejavu-core xvfb xauth && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
