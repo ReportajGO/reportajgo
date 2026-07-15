@@ -1,7 +1,15 @@
+# Cap every container's logs so an error storm can never fill the disk again.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   backend-postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: reportajgo
       POSTGRES_PASSWORD: ${BACKEND_POSTGRES_PASSWORD}
@@ -17,6 +25,7 @@ services:
   frontend-postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: reportajgo
       POSTGRES_PASSWORD: ${FRONTEND_POSTGRES_PASSWORD}
@@ -43,6 +52,7 @@ services:
   backend-app:
     image: ghcr.io/reportajgo/reportajgo-backend:latest
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - ./backend.env
     environment:
@@ -73,6 +83,7 @@ services:
   backend-worker:
     image: ghcr.io/reportajgo/reportajgo-backend:latest
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - ./backend.env
     environment:
@@ -104,6 +115,7 @@ services:
   telegram-bot:
     image: ghcr.io/reportajgo/reportajgo-backend:latest
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - ./backend.env
       - ./bot.env
@@ -122,6 +134,7 @@ services:
   frontend:
     image: ghcr.io/reportajgo/reportajgo-frontend:latest
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - ./frontend.env
     environment:
