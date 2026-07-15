@@ -57,6 +57,12 @@ async function doPost(input: InstagramPostInput): Promise<InstagramPostResult> {
     if (input.isVideo) await handleReelDialog(page);
     await advanceToCaption(page);
     await writeCaption(page, input.caption);
+
+    if (env.INSTAGRAM_DRY_RUN) {
+      log.warn("INSTAGRAM_DRY_RUN — reached the share step with media + caption ready; NOT publishing");
+      return { url: undefined };
+    }
+
     await share(page, input.isVideo ?? false);
 
     const url = await resolvePermalink(page);

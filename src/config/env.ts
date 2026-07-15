@@ -206,6 +206,12 @@ const schema = z.object({
   INSTAGRAM_BROWSER_CHANNEL: z.string().default("chrome"),
   // Where screenshots/HTML are dumped when a posting step fails.
   INSTAGRAM_DEBUG_DIR: z.string().default(".instagram-debug"),
+  // Dry run: drive the whole web Create flow (login, open create, upload, caption)
+  // but stop before the final Share — verifies posting works without publishing.
+  INSTAGRAM_DRY_RUN: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true"),
 
   DASHBOARD_PORT: z.coerce.number().default(3000),
   // Network interface the dashboard binds to. Defaults to loopback so the
