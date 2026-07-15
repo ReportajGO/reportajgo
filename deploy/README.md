@@ -47,6 +47,22 @@ docker compose pull
 docker compose up -d --remove-orphans
 ```
 
+## One-shot configuration (`apply-prod.sh`)
+
+After the GitHub deploy has built the image and uploaded the compose, configure
+all the agent features in one idempotent step. Run it **from your dev machine at
+the repo root** (it needs your SSH key and the local `.secrets/*.json` files):
+
+```bash
+bash deploy/apply-prod.sh                        # Higgsfield + S3 + Website + Instagram
+DO_INSTAGRAM=0 bash deploy/apply-prod.sh         # skip a section
+ASSUME_YES=1 RUN_AFTER=1 bash deploy/apply-prod.sh   # no prompt, trigger a run after
+```
+
+It uploads the Higgsfield token + Instagram session into `.secrets/`, sets the
+matching `backend.env` values (reusing the frontend's S3 bucket + agent key),
+recreates the affected containers, and verifies the result. Safe to re-run.
+
 ## Smoke Checks
 
 ```bash
