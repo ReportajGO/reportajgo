@@ -9,6 +9,7 @@ function abs(p: string): string {
 
 export const INSTAGRAM_PROFILE_DIR = abs(env.INSTAGRAM_PROFILE_DIR);
 export const INSTAGRAM_DEBUG_DIR = abs(env.INSTAGRAM_DEBUG_DIR);
+export const INSTAGRAM_STATE_FILE = abs(env.INSTAGRAM_STATE_FILE);
 
 // A typical desktop viewport — Instagram's web "Create" flow only exists on the
 // desktop layout, so keep this wide.

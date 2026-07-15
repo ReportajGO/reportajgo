@@ -9,7 +9,7 @@
 // tripping Instagram's bot/login checks).
 import { chromium } from "playwright";
 import { env } from "../../config/env.js";
-import { INSTAGRAM_PROFILE_DIR, VIEWPORT } from "./config.js";
+import { INSTAGRAM_PROFILE_DIR, INSTAGRAM_STATE_FILE, VIEWPORT } from "./config.js";
 
 async function main(): Promise<void> {
   const channel = env.INSTAGRAM_BROWSER_CHANNEL.trim();
@@ -32,6 +32,21 @@ async function main(): Promise<void> {
   console.log(" 2) When you reach your Instagram feed, CLOSE the window.");
   console.log(`    Your session will be saved to: ${INSTAGRAM_PROFILE_DIR}`);
   console.log("────────────────────────────────────────────────────────\n");
+
+  // As soon as the login lands, export a portable storageState JSON. The profile
+  // dir's own cookies are OS-encrypted and don't move between machines; this JSON
+  // (plaintext cookies) is what seeds the headless server — see post.ts.
+  void (async () => {
+    for (let i = 0; i < 900; i++) {
+      await page.waitForTimeout(1000).catch(() => {});
+      const cookies = await ctx.cookies("https://www.instagram.com").catch(() => []);
+      if (cookies.some((c) => c.name === "sessionid" && c.value)) {
+        await ctx.storageState({ path: INSTAGRAM_STATE_FILE }).catch(() => {});
+        console.log(`✓ login detected — portable session written to ${INSTAGRAM_STATE_FILE}`);
+        return;
+      }
+    }
+  })();
 
   await new Promise<void>((resolve) => ctx.on("close", () => resolve()));
   console.log("✓ Instagram session saved. Set INSTAGRAM_PUBLISHER=web to use it.");

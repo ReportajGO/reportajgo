@@ -5,12 +5,13 @@
 // This is intentionally tolerant: Instagram's DOM changes often and is
 // localized, so each step tries several selectors and falls back to text/role
 // matches. On any failure we dump a screenshot + HTML to INSTAGRAM_DEBUG_DIR.
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium, type BrowserContext, type Page } from "playwright";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
-import { INSTAGRAM_DEBUG_DIR, INSTAGRAM_PROFILE_DIR, VIEWPORT } from "./config.js";
+import { INSTAGRAM_DEBUG_DIR, INSTAGRAM_PROFILE_DIR, INSTAGRAM_STATE_FILE, VIEWPORT } from "./config.js";
 
 const log = logger.child({ module: "instagram-web" });
 
@@ -45,6 +46,7 @@ async function doPost(input: InstagramPostInput): Promise<InstagramPostResult> {
     Object.defineProperty(navigator, "webdriver", { get: () => undefined });
   });
   try {
+    await seedSessionIfNeeded(ctx);
     const page = ctx.pages()[0] ?? (await ctx.newPage());
     await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" });
     await ensureLoggedIn(page);
@@ -84,6 +86,30 @@ async function launchContext(): Promise<BrowserContext> {
     }
   }
   return chromium.launchPersistentContext(INSTAGRAM_PROFILE_DIR, base);
+}
+
+/**
+ * Bootstrap the login on a fresh profile from the portable storageState JSON.
+ * The persistent profile's own cookies are OS-encrypted (DPAPI on Windows, a
+ * keyring/fallback key on Linux) and don't transfer between machines, so a login
+ * captured on one host is carried as plaintext cookies and injected here. Skipped
+ * when the profile already holds a live sessionid, so a rotated session is never
+ * clobbered by the (older) JSON.
+ */
+async function seedSessionIfNeeded(ctx: BrowserContext): Promise<void> {
+  if (!existsSync(INSTAGRAM_STATE_FILE)) return;
+  const existing = await ctx.cookies("https://www.instagram.com").catch(() => []);
+  if (existing.some((c) => c.name === "sessionid" && c.value)) return;
+  try {
+    const state = JSON.parse(readFileSync(INSTAGRAM_STATE_FILE, "utf8")) as { cookies?: unknown };
+    const cookies = Array.isArray(state.cookies) ? state.cookies : [];
+    if (cookies.length) {
+      await ctx.addCookies(cookies as Parameters<BrowserContext["addCookies"]>[0]);
+      log.info({ count: cookies.length }, "seeded Instagram session from storageState");
+    }
+  } catch (err) {
+    log.warn({ err }, "could not seed Instagram session from storageState");
+  }
 }
 
 async function ensureLoggedIn(page: Page): Promise<void> {

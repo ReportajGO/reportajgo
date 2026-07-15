@@ -190,6 +190,11 @@ const schema = z.object({
   INSTAGRAM_PUBLISHER: z.enum(["graph", "web"]).default("graph"),
   // Persistent Chromium profile holding the one-time Instagram login (gitignored).
   INSTAGRAM_PROFILE_DIR: z.string().default(".instagram-profile"),
+  // Portable, plaintext storageState JSON (cookies) exported by `instagram:login`.
+  // Used to seed the session into a fresh profile — the persistent profile's own
+  // cookies are OS-encrypted and don't transfer between machines, so this JSON is
+  // how a login done on one host bootstraps the headless server's browser.
+  INSTAGRAM_STATE_FILE: z.string().default(".secrets/instagram-state.json"),
   // Run the Instagram browser headless. Default false: a real headed window is
   // far less likely to trip Instagram's automation checks.
   INSTAGRAM_HEADLESS: z
