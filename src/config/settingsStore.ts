@@ -96,7 +96,16 @@ function dedupeUpper(values: string[]): string[] {
 }
 
 async function loadOverrides(): Promise<Partial<RuntimeConfig>> {
-  const row = await prisma.setting.findUnique({ where: { key: SETTINGS_KEY } });
+  let row: { value: string } | null;
+  try {
+    row = await prisma.setting.findUnique({ where: { key: SETTINGS_KEY } });
+  } catch (err) {
+    // Fail open: if the DB is unreachable (e.g. Postgres down), fall back to env
+    // defaults instead of crashing every config read. Overrides resume once the
+    // DB is back. This also lets the standalone media scripts run without docker.
+    log.warn({ err }, "could not load settings overrides (DB unreachable); using env defaults");
+    return {};
+  }
   if (!row) return {};
   try {
     const raw = JSON.parse(row.value) as Record<string, unknown>;
