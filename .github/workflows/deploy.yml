@@ -153,24 +153,49 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Best-effort housekeeping. It must never fail the pipeline: the images
+          # are already built, pushed and deployed by the time this runs, so a
+          # registry that won't drop an old blob is untidy, not broken.
           cleanup_package() {
             local package_name="$1"
-            echo "Cleaning old versions for ${package_name}, keeping tag ${KEEP_TAG}"
+            echo "Cleaning old versions for ${package_name} (keeping ${KEEP_TAG} and latest)"
 
+            # Keep BOTH this build's sha tag and `latest`. They are normally the
+            # same version -- one push, two tags -- but if they ever diverge,
+            # deleting the version behind `latest` would break `docker compose
+            # pull` on the server, which pulls by that tag.
+            local version_ids=()
             mapfile -t version_ids < <(
               gh api --paginate "/orgs/${OWNER}/packages/container/${package_name}/versions" \
-                --jq ".[] | select(((.metadata.container.tags // []) | index(\"${KEEP_TAG}\")) | not) | .id"
-            )
+                --jq ".[]
+                      | select(((.metadata.container.tags // []) | index(\"${KEEP_TAG}\")) | not)
+                      | select(((.metadata.container.tags // []) | index(\"latest\")) | not)
+                      | .id"
+            ) || {
+              echo "::warning::could not list versions for ${package_name}; skipping cleanup"
+              return 0
+            }
 
             if [ "${#version_ids[@]}" -eq 0 ]; then
               echo "No old versions to delete for ${package_name}"
-              return
+              return 0
             fi
 
+            local deleted=0 skipped=0
             for version_id in "${version_ids[@]}"; do
-              echo "Deleting ${package_name} version ${version_id}"
-              gh api --method DELETE "/orgs/${OWNER}/packages/container/${package_name}/versions/${version_id}"
+              # Guarded: GitHub refuses to delete publicly visible versions with
+              # more than 5000 downloads (HTTP 400). Unguarded under `set -e`
+              # that aborts the whole job on the first such version and leaves
+              # every later one uncleaned -- which is what filled the disk.
+              if gh api --method DELETE \
+                   "/orgs/${OWNER}/packages/container/${package_name}/versions/${version_id}" >/dev/null 2>&1; then
+                deleted=$((deleted + 1))
+              else
+                echo "::warning::skipped ${package_name} version ${version_id} (undeletable: >5000 downloads on a public package, or still referenced)"
+                skipped=$((skipped + 1))
+              fi
             done
+            echo "${package_name}: deleted ${deleted}, skipped ${skipped}"
           }
 
           cleanup_package "reportajgo-backend"
