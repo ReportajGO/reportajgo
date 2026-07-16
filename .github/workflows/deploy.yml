@@ -116,9 +116,27 @@ jobs:
             test -f frontend.env
             test -f bot.env
             mv -f docker-compose.production.yml docker-compose.yml
+
+            # 1. Reclaim space BEFORE pulling new layers, so a full disk can't
+            # fail the pull half-way with "no space left on device".
+            #
+            # Images and build cache only — deliberately NOT `system prune
+            # --volumes`. That flag removes every volume not attached to a
+            # running container, and the database lives in the named volumes
+            # backend_pgdata / frontend_pgdata. Any moment the stack is down
+            # (reboot, OOM kill, a previous failed deploy) they count as unused
+            # and would be deleted here, silently, before the pull.
+            docker image prune -f || true
+            docker builder prune -f || true
+
+            # 2. Pull and deploy new images
             docker compose pull
             docker compose up -d --remove-orphans
             docker compose up -d --force-recreate caddy
+
+            # 3. Drop the superseded images now the new ones are running. Safe:
+            # images backing running containers are in use and are kept.
+            docker image prune -a -f || true
 
   cleanup-ghcr:
     needs: deploy
