@@ -10,6 +10,7 @@ import { logger } from "./config/logger.js";
 import { initSettings } from "./config/settingsStore.js";
 import { prisma } from "./db/client.js";
 import { startDashboard } from "./dashboard/server.js";
+import { higgsfieldPreflight } from "./integrations/higgsfield/preflight.js";
 import { registerRepeatableJobs } from "./queue/schedule.js";
 import { startWorkers } from "./queue/workers.js";
 import { syncThemesToWebsite } from "./publish/themes.js";
@@ -23,6 +24,8 @@ async function bootstrap() {
   await registerRepeatableJobs();
   // Make sure the website's themes reflect the current topic filters at startup.
   void syncThemesToWebsite(config.researchTopics);
+  // Self-check image generation so the logs show if the Higgsfield token/network is healthy.
+  void higgsfieldPreflight();
   logger.info("agent ready");
 
   const shutdown = async (signal: string) => {

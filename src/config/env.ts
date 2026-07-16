@@ -1,7 +1,20 @@
+import { setDefaultResultOrder } from "node:dns";
 import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
 
 loadDotenv();
+
+// Prefer IPv4 when resolving hostnames. Node 17+ defaults to "verbatim" (uses the
+// order the resolver returns, often IPv6 first). On Docker/VPS hosts whose IPv6
+// egress to Cloudflare is broken, that makes every request to mcp.higgsfield.ai
+// (and other Cloudflare-fronted hosts) "fetch failed" — so image generation works
+// on Windows dev but fails 100% in the Linux container. Forcing ipv4first fixes it.
+// Override with NODE_OPTIONS=--dns-result-order=verbatim if ever needed.
+try {
+  setDefaultResultOrder("ipv4first");
+} catch {
+  /* older node / unsupported — ignore */
+}
 
 // Comma-separated string -> trimmed non-empty array
 const csv = (val: string | undefined): string[] =>
