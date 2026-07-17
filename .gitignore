@@ -42,6 +42,17 @@ website/public/uploads/*
 # Instagram web automation (login session + debug dumps)
 /.instagram-profile/
 /.instagram-debug/
+# Timestamped backups of the logged-in profile + portable session cookies,
+# made before switching Instagram accounts. Live credentials — never commit.
+/.ig-backup-*/
+
+# Source photos of the presenter, used only to train the Higgsfield Soul by hand.
+# No code reads this folder (the card renderer uses brand/logo.png and
+# brand/reference.png), and the trained Soul lives in Higgsfield — so these never
+# need to be versioned or deployed. They are personal photos of a real person:
+# keep them out of git history, where they would be permanent and readable by
+# everyone with repo access.
+/brand/for face/
 
 # Throwaway POC / debug runner scripts (may contain inline tokens)
 /_run*.mts
