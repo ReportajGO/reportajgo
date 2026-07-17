@@ -61,6 +61,22 @@ services:
       REDIS_URL: redis://redis:6379
       DASHBOARD_BIND: 0.0.0.0
       WEBSITE_API_URL: http://frontend:3000
+      # ── Publishing config (see the identical block on backend-worker) ──
+      # Non-secret operational settings, version-controlled here so they ship with
+      # the stack instead of being hand-synced into backend.env on the server.
+      # These OVERRIDE backend.env (compose `environment` beats `env_file`): change
+      # them HERE, not in backend.env, or the edit won't take effect. Secrets (bot
+      # token, DB password) stay in backend.env. Keep this block identical in both
+      # backend services — the app schedules the platform siblings, the worker
+      # publishes them, so both must agree on which platforms are enabled.
+      ENABLED_PLATFORMS: TELEGRAM,INSTAGRAM
+      TELEGRAM_CHANNEL_ID: "@reportajgo"
+      INSTAGRAM_PUBLISHER: web
+      INSTAGRAM_HEADLESS: "false"
+      INSTAGRAM_BROWSER_CHANNEL: ""
+      BRAND_TELEGRAM_URL: https://t.me/reportajgo
+      BRAND_INSTAGRAM_URL: https://www.instagram.com/reportajgo
+      BRAND_YOUTUBE_URL: https://www.youtube.com/@ReportajGo
     command: sh -c "npx prisma migrate deploy && npm run start:app"
     healthcheck:
       test:
@@ -91,6 +107,27 @@ services:
       DATABASE_URL: postgresql://reportajgo:${BACKEND_POSTGRES_PASSWORD}@backend-postgres:5432/reportajgo_backend?schema=public
       REDIS_URL: redis://redis:6379
       WEBSITE_API_URL: http://frontend:3000
+      # ── Publishing config (see the identical block on backend-app) ──
+      # Non-secret operational settings, version-controlled here so they ship with
+      # the stack instead of being hand-synced into backend.env on the server.
+      # These OVERRIDE backend.env (compose `environment` beats `env_file`): change
+      # them HERE, not in backend.env, or the edit won't take effect. Secrets (bot
+      # token, DB password) stay in backend.env.
+      #   TELEGRAM_CHANNEL_ID  — was @my_special_musics on the server; posts now go
+      #                          to the real channel.
+      #   INSTAGRAM_PUBLISHER  — was defaulting to `graph` (Meta API, unconfigured
+      #                          → "META_IG_BUSINESS_ID is not set"); `web` uses the
+      #                          browser session at .secrets/instagram-state.json.
+      #   INSTAGRAM_BROWSER_CHANNEL="" — the slim image has no real Chrome; empty
+      #                          means Playwright's bundled Chromium.
+      ENABLED_PLATFORMS: TELEGRAM,INSTAGRAM
+      TELEGRAM_CHANNEL_ID: "@reportajgo"
+      INSTAGRAM_PUBLISHER: web
+      INSTAGRAM_HEADLESS: "false"
+      INSTAGRAM_BROWSER_CHANNEL: ""
+      BRAND_TELEGRAM_URL: https://t.me/reportajgo
+      BRAND_INSTAGRAM_URL: https://www.instagram.com/reportajgo
+      BRAND_YOUTUBE_URL: https://www.youtube.com/@ReportajGo
     # Mounted state for the worker (the only container that generates media +
     # publishes):
     #  - ./.secrets: Higgsfield OAuth token store (gitignored, not in the image).
