@@ -20,12 +20,12 @@ export default async function Ticker() {
   return (
     <div className="overflow-hidden border-b border-white/10 bg-brand-black text-white dark:text-ink">
       <div className="flex items-center">
-        <div className="z-[2] flex shrink-0 items-center gap-2 bg-brand-red px-3.5 py-[7px] font-display text-xs font-extrabold uppercase tracking-[.08em] text-white">
+        <div className="z-[2] flex shrink-0 items-center gap-2 bg-brand-red px-3.5 py-[4px] font-display text-xs font-extrabold uppercase tracking-[.08em] text-white">
           <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
           {t("label")}
         </div>
         <div className="ticker-mask flex-1 overflow-hidden">
-          <div className="flex w-max animate-ticker gap-[34px] px-[22px] py-[7px] font-mono text-[13px]">
+          <div className="flex w-max animate-ticker gap-[34px] px-[22px] py-[4px] font-mono text-[13px]">
             {items}
             {/* duplicate run for a seamless loop */}
             {items}
