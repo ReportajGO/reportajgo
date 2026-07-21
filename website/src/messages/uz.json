@@ -125,6 +125,20 @@
       "maintenanceDesc": "Saytdagi barcha faol maqolalarni tozalang yoki tozalanganlarni tiklang. Tozalash qaytariladi — hech narsa butunlay o‘chirilmaydi.",
       "sectionsNote": "Bo‘limlar agentdagi mavzu filtrlaridan avtomatik shakllanadi. Bo‘limlarni o‘zgartirish uchun agentda filtr qo‘shing yoki olib tashlang."
     },
+    "security": {
+      "title": "Xavfsizlik",
+      "desc": "Administrator hisobingiz parolini o‘zgartiring.",
+      "current": "Joriy parol",
+      "new": "Yangi parol",
+      "confirm": "Yangi parolni tasdiqlang",
+      "submit": "Parolni o‘zgartirish",
+      "working": "Saqlanmoqda…",
+      "success": "Parol yangilandi.",
+      "mismatch": "Yangi parollar mos kelmadi.",
+      "tooShort": "Parol kamida 12 ta belgidan iborat bo‘lishi kerak.",
+      "wrongCurrent": "Joriy parol noto‘g‘ri.",
+      "sameAsOld": "Yangi parol eskisidan farq qilishi kerak."
+    },
     "sectionsPage": {
       "title": "Bo‘limlar",
       "desc": "Yangilik bo‘limlari agent filtrlaridan shakllanadi. Har biri tegishli yangiliklarni avtomatik ko‘rsatadi.",

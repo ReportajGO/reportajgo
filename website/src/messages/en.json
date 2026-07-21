@@ -125,6 +125,20 @@
       "maintenanceDesc": "Clear all live articles from the public site, or restore everything you cleared. Clearing is reversible — nothing is permanently deleted.",
       "sectionsNote": "Sections are managed automatically from the agent's topic filters. Add or remove a filter in the agent to change the sections shown on the site."
     },
+    "security": {
+      "title": "Security",
+      "desc": "Change your admin account password.",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "submit": "Change password",
+      "working": "Saving…",
+      "success": "Password updated.",
+      "mismatch": "New passwords don't match.",
+      "tooShort": "Password must be at least 12 characters.",
+      "wrongCurrent": "Current password is incorrect.",
+      "sameAsOld": "New password must be different from the old one."
+    },
     "sectionsPage": {
       "title": "Sections",
       "desc": "News sections come from the agent's topic filters. Each one automatically shows related news.",

@@ -1,6 +1,7 @@
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { getContentCounts } from "@/lib/posts";
 import ClearControls from "@/components/admin/ClearControls";
+import ChangePassword from "@/components/admin/ChangePassword";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,19 @@ export default async function AdminSettingsPage({
       </h1>
 
       <div className="space-y-5">
+        {/* Security — change admin password */}
+        <section className="rounded-2xl border border-line bg-surface p-5">
+          <h2 className="font-display text-lg font-extrabold text-ink">
+            {t("security.title")}
+          </h2>
+          <p className="mt-1 max-w-2xl font-display text-sm text-ink-soft">
+            {t("security.desc")}
+          </p>
+          <div className="mt-4">
+            <ChangePassword />
+          </div>
+        </section>
+
         {/* Maintenance */}
         <section className="rounded-2xl border border-line bg-surface p-5">
           <h2 className="font-display text-lg font-extrabold text-ink">
