@@ -110,3 +110,16 @@ model Ad {
 
   @@index([slot, published, order])
 }
+
+// One row per public page view. `visitorId` is a first-party cookie (rgo_vid,
+// set in middleware) so we can count both page views (rows) and unique visitors
+// (distinct visitorId) per time window for the admin audience stats.
+model Visit {
+  id        String   @id @default(cuid())
+  visitorId String
+  path      String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId, createdAt])
+}

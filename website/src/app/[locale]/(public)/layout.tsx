@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import AdSlot from "@/components/AdSlot";
 import CookieConsent from "@/components/CookieConsent";
 import AutoScrollButton from "@/components/AutoScrollButton";
+import VisitTracker from "@/components/VisitTracker";
 import { getActiveThemes } from "@/lib/themes";
 
 export default async function PublicLayout({
@@ -37,8 +38,9 @@ export default async function PublicLayout({
       <main className="mx-auto min-h-[60vh] max-w-page px-[22px]">
         {children}
       </main>
-      <Footer themes={navThemes} />
+      <Footer />
       <AutoScrollButton />
+      <VisitTracker />
       <CookieConsent />
     </>
   );

@@ -3,8 +3,7 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
-import DeleteButton from "@/components/admin/DeleteButton";
+import { Link, useRouter } from "@/i18n/navigation";
 
 export interface AdminPostRow {
   id: string;
@@ -14,6 +13,7 @@ export interface AdminPostRow {
   language: string;
   cleared: boolean;
   breaking: boolean;
+  views: number;
   when: string;
 }
 
@@ -30,6 +30,14 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
   const [section, setSection] = useState("");
   const [lang, setLang] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  // "Hot" = editor-flagged breaking. "Interesting" = most-viewed (trending).
+  const [hot, setHot] = useState(false);
+  const [interesting, setInteresting] = useState(false);
+
+  const router = useRouter();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   // Options derived from the data itself, so they always match what exists.
   const sections = useMemo(
@@ -41,6 +49,18 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
     [rows],
   );
 
+  // "Interesting" = the top quartile by views. Derived from the data so it stays
+  // meaningful as traffic grows; when nothing has views yet, nothing qualifies.
+  const viewsThreshold = useMemo(() => {
+    const vs = rows
+      .map((r) => r.views)
+      .filter((v) => v > 0)
+      .sort((a, b) => a - b);
+    if (vs.length === 0) return Infinity;
+    return vs[Math.min(Math.floor(vs.length * 0.75), vs.length - 1)];
+  }, [rows]);
+  const isInteresting = (r: AdminPostRow) => r.views > 0 && r.views >= viewsThreshold;
+
   const filtered = useMemo(() => {
     const needle = fold(q.trim());
     return rows.filter((r) => {
@@ -48,21 +68,86 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
       if (lang && r.language !== lang) return false;
       if (status === "live" && r.cleared) return false;
       if (status === "cleared" && !r.cleared) return false;
+      if (hot && !r.breaking) return false;
+      if (interesting && !isInteresting(r)) return false;
       if (needle && !fold(r.title).includes(needle)) return false;
       return true;
     });
-  }, [rows, q, section, lang, status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, q, section, lang, status, hot, interesting, viewsThreshold]);
 
-  const isFiltering = Boolean(q || section || lang || status !== "all");
+  const isFiltering = Boolean(
+    q || section || lang || status !== "all" || hot || interesting,
+  );
   const reset = () => {
     setQ("");
     setSection("");
     setLang("");
     setStatus("all");
+    setHot(false);
+    setInteresting(false);
   };
+
+  // ── Selection + trash/restore/delete ───────────────────────────────────────
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((r) => selected.has(r.id));
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      // Toggle only the currently-visible (filtered) rows.
+      if (allFilteredSelected) filtered.forEach((r) => next.delete(r.id));
+      else filtered.forEach((r) => next.add(r.id));
+      return next;
+    });
+  }
+
+  async function run(endpoint: string, ids: string[], confirmMsg?: string) {
+    if (ids.length === 0) return;
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "Error");
+      }
+      setSelected(new Set());
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const trash = (ids: string[]) => run("/api/posts/trash", ids);
+  const restore = (ids: string[]) => run("/api/posts/restore", ids);
+  const deletePermanent = (ids: string[], msg: string) => run("/api/posts/delete", ids, msg);
 
   const selectCls =
     "rounded-lg border border-line bg-surface px-3 py-2 font-display text-sm text-ink outline-none focus:border-brand-red";
+  const chipCls = (active: boolean) =>
+    `rounded-lg border px-3 py-2 font-display text-sm font-bold transition-colors ${
+      active
+        ? "border-brand-red bg-brand-red text-white"
+        : "border-line text-ink-soft hover:border-brand-red hover:text-ink"
+    }`;
+
+  const inTrash = status === "cleared";
 
   return (
     <div>
@@ -99,6 +184,17 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
           <option value="live">{t("filter.live")}</option>
           <option value="cleared">{t("filter.cleared")}</option>
         </select>
+        <button type="button" onClick={() => setHot((v) => !v)} aria-pressed={hot} className={chipCls(hot)}>
+          🔥 {t("filter.hot")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setInteresting((v) => !v)}
+          aria-pressed={interesting}
+          className={chipCls(interesting)}
+        >
+          ⭐ {t("filter.interesting")}
+        </button>
         {isFiltering && (
           <button
             type="button"
@@ -113,6 +209,61 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
         </span>
       </div>
 
+      {/* Bulk action bar — appears once anything is selected. Actions depend on
+          whether you're viewing the trash (Cleared) or live posts. */}
+      {selected.size > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand-red/40 bg-brand-red/5 px-3 py-2.5">
+          <span className="font-display text-sm font-bold text-ink">
+            {t("bulk.selected", { count: selected.size })}
+          </span>
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="rounded-lg border border-line px-3 py-1.5 font-display text-xs font-bold text-ink-soft transition-colors hover:border-brand-red hover:text-ink"
+          >
+            {t("bulk.selectAll")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="rounded-lg border border-line px-3 py-1.5 font-display text-xs font-bold text-ink-soft transition-colors hover:border-brand-red hover:text-ink"
+          >
+            {t("bulk.clear")}
+          </button>
+          <div className="flex-1" />
+          {inTrash ? (
+            <>
+              <button
+                type="button"
+                onClick={() => restore([...selected])}
+                disabled={busy}
+                className="rounded-lg border border-line px-3 py-1.5 font-display text-xs font-bold text-ink-soft transition-colors hover:border-brand-red hover:text-ink disabled:opacity-40"
+              >
+                {busy ? t("bulk.working") : t("bulk.restore")}
+              </button>
+              <button
+                type="button"
+                onClick={() => deletePermanent([...selected], t("bulk.confirm", { count: selected.size }))}
+                disabled={busy}
+                className="rounded-lg bg-brand-red px-3 py-1.5 font-display text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {t("bulk.deleteForever")}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => trash([...selected])}
+              disabled={busy}
+              className="rounded-lg bg-brand-red px-3 py-1.5 font-display text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              {busy ? t("bulk.working") : t("bulk.trash")}
+            </button>
+          )}
+        </div>
+      )}
+      {error && <p className="mb-3 font-display text-sm text-brand-red">{error}</p>}
+
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface py-16 text-center font-display text-ink-soft">
           {t("filter.noMatches")}
@@ -120,7 +271,19 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
       ) : (
         <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {filtered.map((p) => (
-            <li key={p.id} className="flex gap-3 rounded-xl border border-line bg-surface p-3">
+            <li
+              key={p.id}
+              className={`flex gap-3 rounded-xl border bg-surface p-3 transition-colors ${
+                selected.has(p.id) ? "border-brand-red ring-1 ring-brand-red" : "border-line"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(p.id)}
+                onChange={() => toggle(p.id)}
+                aria-label={t("bulk.select")}
+                className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-brand-red"
+              />
               {/* Small thumbnail */}
               <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-lg bg-bg-sub">
                 {p.imageUrl ? (
@@ -173,7 +336,35 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
                   >
                     {t("actions.edit")}
                   </Link>
-                  <DeleteButton id={p.id} />
+                  {p.cleared ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => restore([p.id])}
+                        disabled={busy}
+                        className="font-display text-xs font-bold text-brand-red hover:underline disabled:opacity-50"
+                      >
+                        {t("actions.restore")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deletePermanent([p.id], t("actions.confirmDelete"))}
+                        disabled={busy}
+                        className="font-display text-xs font-bold text-ink-soft hover:text-brand-red hover:underline disabled:opacity-50"
+                      >
+                        {t("actions.deleteForever")}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => trash([p.id])}
+                      disabled={busy}
+                      className="font-display text-xs font-bold text-brand-red hover:underline disabled:opacity-50"
+                    >
+                      {t("actions.trash")}
+                    </button>
+                  )}
                 </div>
               </div>
             </li>

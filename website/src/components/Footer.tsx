@@ -1,18 +1,15 @@
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 import Logo from "./Logo";
 import LangSwitcher from "./LangSwitcher";
 import SocialLinks from "./SocialLinks";
 
-type NavTheme = { slug: string; name: string };
-
-export default function Footer({ themes }: { themes: NavTheme[] }) {
+export default function Footer() {
   const t = useTranslations();
 
   return (
     <footer className="mt-14 bg-ink py-12 text-bg">
       <div className="mx-auto max-w-page px-[22px]">
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr]">
           <div>
             <Logo size="md" invert />
             <p className="mt-2 font-display text-[11px] font-semibold uppercase tracking-[.12em] text-brand-red">
@@ -22,27 +19,6 @@ export default function Footer({ themes }: { themes: NavTheme[] }) {
               {t("footer.tagline")}
             </p>
             <SocialLinks onDark className="mt-4" />
-          </div>
-
-          <div>
-            <h4 className="mb-3 font-display text-[13px] font-extrabold uppercase tracking-[.08em] opacity-60">
-              {t("footer.sections")}
-            </h4>
-            <Link
-              href="/"
-              className="block py-[5px] font-display text-sm opacity-85 hover:text-brand-red hover:opacity-100"
-            >
-              {t("nav.home")}
-            </Link>
-            {themes.map((theme) => (
-              <Link
-                key={theme.slug}
-                href={`/${theme.slug}`}
-                className="block py-[5px] font-display text-sm opacity-85 hover:text-brand-red hover:opacity-100"
-              >
-                {theme.name}
-              </Link>
-            ))}
           </div>
 
           <div>

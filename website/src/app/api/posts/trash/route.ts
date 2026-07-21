@@ -7,11 +7,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/posts/restore — bring cleared/trashed posts back to live.
+ * POST /api/posts/trash — move several posts to the trash (admin "selective
+ * delete"). Body: { ids: string[] }.
  *
- * Body: { ids?: string[] }. With `ids`, restores just those posts (used by the
- * admin list's per-item / bulk restore). With no body, restores EVERY cleared
- * post (the Settings "Restore all" button). Non-destructive either way.
+ * This is a SOFT delete: it sets `clearedAt`, hiding the posts everywhere public
+ * but keeping them recoverable via /api/posts/restore. Permanent removal is
+ * /api/posts/delete.
  */
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -21,13 +22,13 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { ids?: unknown } | null;
   const ids = Array.isArray(body?.ids)
     ? body!.ids.filter((v): v is string => typeof v === "string")
-    : null;
+    : [];
+  if (ids.length === 0)
+    return NextResponse.json({ error: "No ids provided" }, { status: 400 });
 
-  const where =
-    ids && ids.length > 0
-      ? { id: { in: ids }, clearedAt: { not: null } }
-      : { clearedAt: { not: null } };
-
-  const r = await prisma.post.updateMany({ where, data: { clearedAt: null } });
-  return NextResponse.json({ ok: true, restored: r.count });
+  const r = await prisma.post.updateMany({
+    where: { id: { in: ids }, clearedAt: null },
+    data: { clearedAt: new Date() },
+  });
+  return NextResponse.json({ ok: true, trashed: r.count });
 }

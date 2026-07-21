@@ -113,6 +113,15 @@
       "menu": "Menyu",
       "ads": "Reklama"
     },
+    "analytics": {
+      "title": "Auditoriya",
+      "day": "Kunlik",
+      "week": "Haftalik",
+      "month": "Oylik",
+      "year": "Yillik",
+      "users": "foydalanuvchi",
+      "views": "ko‘rish"
+    },
     "stats": {
       "total": "Jami",
       "live": "Faol",
@@ -192,7 +201,10 @@
       "confirmDelete": "Bu publikatsiya o‘chirilsinmi?",
       "approve": "Tasdiqlash",
       "reject": "Rad etish",
-      "unpublish": "Olib qo‘yish"
+      "unpublish": "Olib qo‘yish",
+      "trash": "Savatga",
+      "restore": "Tiklash",
+      "deleteForever": "Butunlay o‘chirish"
     },
     "table": {
       "title": "Sarlavha",
@@ -210,7 +222,21 @@
       "cleared": "Tozalangan",
       "results": "{total} tadan {n} ta",
       "noMatches": "Filtrlarga mos post yoʻq",
-      "reset": "Tozalash"
+      "reset": "Tozalash",
+      "hot": "Qizg‘in",
+      "interesting": "Qiziqarli"
+    },
+    "bulk": {
+      "select": "Tanlash",
+      "selected": "{count} ta tanlandi",
+      "selectAll": "Hammasini tanlash",
+      "clear": "Bekor qilish",
+      "delete": "Tanlanganlarni o‘chirish",
+      "trash": "Savatga ko‘chirish",
+      "restore": "Tiklash",
+      "deleteForever": "Butunlay o‘chirish",
+      "working": "O‘chirilmoqda…",
+      "confirm": "Tanlangan {count} ta maqola butunlay o‘chirilsinmi? Bu amalni ortga qaytarib bo‘lmaydi."
     },
     "ads": {
       "title": "Reklama",
