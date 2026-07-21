@@ -26,7 +26,7 @@ export default function NavBar({ themes }: { themes: NavTheme[] }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`whitespace-nowrap border-b-[3px] px-3 pb-2.5 pt-3 text-[14px] font-bold transition-colors sm:px-3.5 sm:pb-3 sm:pt-3.5 sm:text-[14.5px] ${
+              className={`whitespace-nowrap border-b-[3px] px-3 pb-2.5 pt-3 text-[14px] font-bold transition-[color,padding] duration-300 group-data-[scrolled=true]/top:pb-1.5 group-data-[scrolled=true]/top:pt-2 sm:px-3.5 sm:pb-3 sm:pt-3.5 sm:text-[14.5px] sm:group-data-[scrolled=true]/top:pb-2 sm:group-data-[scrolled=true]/top:pt-2 ${
                 isActive(item.href)
                   ? "border-brand-red text-ink"
                   : "border-transparent text-ink-soft hover:text-ink"

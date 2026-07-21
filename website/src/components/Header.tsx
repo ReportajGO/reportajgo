@@ -17,10 +17,10 @@ export default function Header({ themes }: { themes: NavTheme[] }) {
 
   return (
     <header className="border-b border-line bg-bg/90 backdrop-blur-md backdrop-saturate-150">
-      <div className="mx-auto flex max-w-page items-center gap-2 px-4 py-2.5 sm:gap-4 sm:px-[22px] sm:py-3.5">
+      <div className="mx-auto flex max-w-page items-center gap-2 px-4 py-2.5 transition-[padding] duration-300 group-data-[scrolled=true]/top:py-1.5 sm:gap-4 sm:px-[22px] sm:py-3.5 sm:group-data-[scrolled=true]/top:py-2">
         <div className="flex min-w-0 flex-col">
           <Logo size="md" />
-          <span className="mt-0.5 hidden font-display text-[11px] font-semibold uppercase tracking-[.12em] text-brand-red sm:block">
+          <span className="mt-0.5 hidden font-display text-[11px] font-semibold uppercase tracking-[.12em] text-brand-red sm:block sm:group-data-[scrolled=true]/top:hidden">
             {t("brand.slogan")}
           </span>
         </div>
