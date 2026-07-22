@@ -37,7 +37,6 @@ export default function NewsCard({ post }: { post: PostDTO }) {
           <Meta
             categoryName={post.categoryName}
             createdAt={post.createdAt}
-            views={post.views}
           />
         </div>
       </Link>

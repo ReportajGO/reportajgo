@@ -62,7 +62,6 @@ export default async function ArticlePage({
             categoryName={post.categoryName}
             createdAt={post.createdAt}
             readMin={readMin}
-            views={post.views}
           />
         </div>
         <h1 className="mb-3 font-serif text-[26px] font-bold leading-[1.12] tracking-tight sm:text-[36px] sm:leading-[1.09] lg:text-[44px] lg:leading-[1.07]">
