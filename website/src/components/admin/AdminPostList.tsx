@@ -30,9 +30,6 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
   const [section, setSection] = useState("");
   const [lang, setLang] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
-  // "Hot" = editor-flagged breaking. "Interesting" = most-viewed (trending).
-  const [hot, setHot] = useState(false);
-  const [interesting, setInteresting] = useState(false);
 
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -49,18 +46,6 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
     [rows],
   );
 
-  // "Interesting" = the top quartile by views. Derived from the data so it stays
-  // meaningful as traffic grows; when nothing has views yet, nothing qualifies.
-  const viewsThreshold = useMemo(() => {
-    const vs = rows
-      .map((r) => r.views)
-      .filter((v) => v > 0)
-      .sort((a, b) => a - b);
-    if (vs.length === 0) return Infinity;
-    return vs[Math.min(Math.floor(vs.length * 0.75), vs.length - 1)];
-  }, [rows]);
-  const isInteresting = (r: AdminPostRow) => r.views > 0 && r.views >= viewsThreshold;
-
   const filtered = useMemo(() => {
     const needle = fold(q.trim());
     return rows.filter((r) => {
@@ -68,24 +53,17 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
       if (lang && r.language !== lang) return false;
       if (status === "live" && r.cleared) return false;
       if (status === "cleared" && !r.cleared) return false;
-      if (hot && !r.breaking) return false;
-      if (interesting && !isInteresting(r)) return false;
       if (needle && !fold(r.title).includes(needle)) return false;
       return true;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, section, lang, status, hot, interesting, viewsThreshold]);
+  }, [rows, q, section, lang, status]);
 
-  const isFiltering = Boolean(
-    q || section || lang || status !== "all" || hot || interesting,
-  );
+  const isFiltering = Boolean(q || section || lang || status !== "all");
   const reset = () => {
     setQ("");
     setSection("");
     setLang("");
     setStatus("all");
-    setHot(false);
-    setInteresting(false);
   };
 
   // ── Selection + trash/restore/delete ───────────────────────────────────────
@@ -140,12 +118,6 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
 
   const selectCls =
     "rounded-lg border border-line bg-surface px-3 py-2 font-display text-sm text-ink outline-none focus:border-brand-red";
-  const chipCls = (active: boolean) =>
-    `rounded-lg border px-3 py-2 font-display text-sm font-bold transition-colors ${
-      active
-        ? "border-brand-red bg-brand-red text-white"
-        : "border-line text-ink-soft hover:border-brand-red hover:text-ink"
-    }`;
 
   const inTrash = status === "cleared";
 
@@ -184,17 +156,6 @@ export default function AdminPostList({ rows }: { rows: AdminPostRow[] }) {
           <option value="live">{t("filter.live")}</option>
           <option value="cleared">{t("filter.cleared")}</option>
         </select>
-        <button type="button" onClick={() => setHot((v) => !v)} aria-pressed={hot} className={chipCls(hot)}>
-          🔥 {t("filter.hot")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setInteresting((v) => !v)}
-          aria-pressed={interesting}
-          className={chipCls(interesting)}
-        >
-          ⭐ {t("filter.interesting")}
-        </button>
         {isFiltering && (
           <button
             type="button"
