@@ -5,7 +5,8 @@ import { logger } from "../config/logger.js";
 import { prisma } from "../db/client.js";
 import { approveDraft, rejectDraft } from "../dashboard/approvalService.js";
 import { scanNow } from "../dashboard/controlService.js";
-import { platformsWithoutRequiredMedia } from "../domain/platforms.js";
+import { platformsWithoutRequiredMedia, profileFor } from "../domain/platforms.js";
+import type { Platform } from "../domain/types.js";
 import { MEDIA_ROOT } from "../generate/media/mediaStore.js";
 import {
   getPublishState,
@@ -157,6 +158,9 @@ async function sweep(): Promise<void> {
   // Merge media across ALL of an item's drafts so the card can show the Reel
   // (on the Instagram draft) even though the TELEGRAM draft is the representative.
   const mediaByNews = new Map<string, { type: string; url: string }[]>();
+  // Every pending draft per item, so a card can fall back to a text-capable
+  // sibling when the preferred representative can't post without media.
+  const allByNews = new Map<string, (typeof drafts)[number][]>();
   for (const d of drafts) {
     const current = byNews.get(d.newsItemId);
     if (!current || (d.platform === "TELEGRAM" && current.platform !== "TELEGRAM")) {
@@ -165,6 +169,9 @@ async function sweep(): Promise<void> {
     const acc = mediaByNews.get(d.newsItemId) ?? [];
     acc.push(...d.media);
     mediaByNews.set(d.newsItemId, acc);
+    const siblings = allByNews.get(d.newsItemId) ?? [];
+    siblings.push(d);
+    allByNews.set(d.newsItemId, siblings);
   }
 
   // Send a card as soon as ANY of the item's drafts has ready media — don't wait
@@ -173,9 +180,29 @@ async function sweep(): Promise<void> {
   // the next sweep sends its own follow-up card. Approving a card only schedules
   // siblings whose media is already READY (see approveDraft), so nothing publishes
   // without its media.
-  for (const rep of byNews.values()) {
-    const media = mediaByNews.get(rep.newsItemId) ?? [];
-    if (env.MEDIA_GENERATION_ENABLED && media.length === 0) continue; // this item has no ready media yet
+  let withheld = 0;
+  for (const preferred of byNews.values()) {
+    const media = mediaByNews.get(preferred.newsItemId) ?? [];
+    let rep = preferred;
+
+    // No ready media for this item. A broken image provider must not silently
+    // stall the whole approval queue — it stalls it forever, since approvalSentAt
+    // stays null and every later sweep skips the same items again. Telegram and
+    // the website are mediaRequired:false and approveDraft accepts them
+    // text-only, so fall back to such a sibling and send the card without an
+    // image. Only withhold when every pending draft for the item needs media.
+    if (env.MEDIA_GENERATION_ENABLED && media.length === 0
+        && profileFor(rep.platform as Platform).mediaRequired) {
+      const textCapable = (allByNews.get(preferred.newsItemId) ?? []).find(
+        (d) => !profileFor(d.platform as Platform).mediaRequired,
+      );
+      if (!textCapable) {
+        withheld++;
+        continue;
+      }
+      rep = textCapable;
+    }
+
     // Show the Reel (video) when the item has one; keep the rep's headline/text.
     const draft = { ...rep, media };
     try {
@@ -189,6 +216,15 @@ async function sweep(): Promise<void> {
     } catch (err) {
       log.error({ err, draftId: draft.id }, "failed to send approval message");
     }
+  }
+
+  // Never let a stalled queue be silent: this is the one path that produces
+  // "the bot stopped sending approvals" with no other symptom.
+  if (withheld > 0) {
+    log.warn(
+      { withheld },
+      "approval cards withheld — media-required drafts have no READY media; check the image provider",
+    );
   }
 }
 

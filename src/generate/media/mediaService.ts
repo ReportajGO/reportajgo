@@ -241,6 +241,15 @@ export async function generateMediaForPendingDrafts(opts?: {
         );
       }
 
+      // persistAsset records a failed generation as a FAILED asset and returns
+      // normally, so an unchecked failure here would advance the draft to
+      // PENDING_APPROVAL with no usable media. For platforms that can't post
+      // without media that draft is unapprovable — fail it explicitly (the
+      // VIDEO branch above already does) so it surfaces instead of piling up.
+      if (image.status !== "READY" && profile.mediaRequired) {
+        throw new Error(`image generation failed and ${draft.platform} requires media`);
+      }
+
       await prisma.postDraft.update({
         where: { id: draft.id },
         data: { status: "PENDING_APPROVAL" },
