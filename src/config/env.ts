@@ -87,6 +87,15 @@ const schema = z.object({
   HIGGSFIELD_IMAGE_MODEL: z.string().default("nano_banana_pro"),
   // Higgsfield V2 SDK uses "KEY_ID:KEY_SECRET" credentials from cloud.higgsfield.ai.
   HIGGSFIELD_CREDENTIALS: z.string().optional(),
+  // ElevenLabs, for the news presenter's cloned voice. The clone is private to
+  // your ElevenLabs account, so it is only reachable with your own key —
+  // Higgsfield's built-in ElevenLabs engine cannot see it.
+  ELEVENLABS_API_KEY: z.string().optional(),
+  ELEVENLABS_VOICE_ID: z.string().optional(),
+  // eleven_v3 is the model with Uzbek coverage; the v2/turbo families are
+  // limited to ~30 languages and do not include it.
+  ELEVENLABS_MODEL_ID: z.string().default("eleven_v3"),
+
   MEDIA_FALLBACK_PROVIDER: z.enum(["none", "fal", "replicate"]).default("none"),
   FAL_API_KEY: z.string().optional(),
   REPLICATE_API_TOKEN: z.string().optional(),

@@ -32,8 +32,22 @@ export async function saveImage(
   data: string | Buffer,
   mimeType = "image/png",
 ): Promise<StoredAsset> {
-  const filename = `${randomUUID()}.${extFor(mimeType)}`;
   const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data, "base64");
+  return storeBytes(bytes, mimeType, extFor(mimeType));
+}
+
+/**
+ * Persist generated speech (WAV) the same way as images. Higgsfield's Speak
+ * endpoint fetches the audio by URL, so this must land somewhere publicly
+ * reachable — see assertPubliclyFetchable in anchorVideo.ts.
+ */
+export async function saveAudio(bytes: Buffer, mimeType = "audio/wav"): Promise<StoredAsset> {
+  return storeBytes(bytes, mimeType, mimeType.includes("mpeg") ? "mp3" : "wav");
+}
+
+/** Shared write path for every stored asset: S3 when configured, else local disk. */
+async function storeBytes(bytes: Buffer, mimeType: string, ext: string): Promise<StoredAsset> {
+  const filename = `${randomUUID()}.${ext}`;
 
   if (env.MEDIA_STORAGE_DRIVER === "s3") {
     const prefix = env.AWS_S3_KEY_PREFIX.replace(/^\/+|\/+$/g, "");
