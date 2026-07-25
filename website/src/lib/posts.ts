@@ -143,17 +143,15 @@ export async function recordView(
   id: string,
   locale?: string,
 ): Promise<PostDTO | null> {
-  try {
-    const row = await prisma.post.update({
-      where: { id },
-      data: { views: { increment: 1 } },
-      include,
-    });
-    return toDTO(row, locale);
-  } catch {
-    // Post may not exist — fall back to a plain read.
-    return getPostById(id, locale);
-  }
+  // updateMany is a no-op (count: 0) for a since-deleted post instead of
+  // throwing P2025 like update() — which Prisma logs as a spurious
+  // `prisma:error` before we could catch it. Bumping the view of a post the
+  // 24h cleanup already purged is harmless, so we don't care about the count.
+  await prisma.post.updateMany({
+    where: { id },
+    data: { views: { increment: 1 } },
+  });
+  return getPostById(id, locale);
 }
 
 /**
