@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Telegraf } from "telegraf";
 import { env } from "../config/env.js";
@@ -61,11 +62,19 @@ function escapeHtml(s: unknown): string {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Map a served /media/<file> URL back to its local path for upload. */
+/**
+ * Map a served /media/<file> URL back to its local path for upload — but only
+ * when that file actually exists on disk. Media now lives on S3, whose URLs also
+ * contain "/media/"; without the existence check we'd rewrite an S3 URL to a
+ * bogus local path and crash telegraf with ENOENT. Returning undefined makes the
+ * caller fall back to sending Telegram the public URL directly.
+ */
 function localPathFor(url: string): string | undefined {
   const marker = "/media/";
   const idx = url.indexOf(marker);
-  return idx === -1 ? undefined : join(MEDIA_ROOT, url.slice(idx + marker.length));
+  if (idx === -1) return undefined;
+  const path = join(MEDIA_ROOT, url.slice(idx + marker.length));
+  return existsSync(path) ? path : undefined;
 }
 
 interface DraftForApproval {
