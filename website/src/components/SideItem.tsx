@@ -9,7 +9,7 @@ export default function SideItem({ post }: { post: PostDTO }) {
   const { emoji, text: titleText } = splitLeadingEmoji(post.title);
   return (
     <Link
-      href={`/article/${post.id}`}
+      href={`/article/${post.slug}`}
       className="group grid grid-cols-[1fr_auto] items-start gap-3.5 border-b border-line py-4"
     >
       <div>

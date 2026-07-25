@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "./prisma";
 import type { CategorySlug } from "./constants";
 import type { Translations } from "./translate";
@@ -5,6 +6,7 @@ import type { Translations } from "./translate";
 // Shape consumed by the UI (category flattened to its slug + localized name).
 export type PostDTO = {
   id: string;
+  slug: string; // SEO URL slug; falls back to id for any un-backfilled post
   title: string;
   excerpt: string;
   body: string;
@@ -24,6 +26,7 @@ export type PostDTO = {
 
 type WithCategoryAuthor = {
   id: string;
+  slug: string | null;
   title: string;
   excerpt: string;
   body: string;
@@ -72,6 +75,7 @@ function toDTO(p: WithCategoryAuthor, locale?: string): PostDTO {
   const tr = locale ? parseTranslations(p.translations)?.[locale] : undefined;
   return {
     id: p.id,
+    slug: p.slug ?? p.id, // pretty slug when present; legacy id keeps links working
     title: tr?.title || p.title,
     excerpt: tr?.excerpt || p.excerpt,
     body: tr?.body || p.body,
@@ -128,6 +132,30 @@ export async function getPostsByCategory(
   });
   return rows.map((r) => toDTO(r, locale));
 }
+
+/** Identity of a post resolved from a URL segment. */
+export type PostRef = { id: string; slug: string | null };
+
+/**
+ * Resolve a reader URL segment that may be a pretty slug (new posts) or a bare
+ * cuid (legacy links shared before slugs existed). Slug is tried first; both are
+ * unique indexed columns so each lookup is a fast point read. `cache()` dedupes
+ * the query across `generateMetadata` and the page render within one request.
+ */
+export const resolvePostRef = cache(
+  async (segment: string): Promise<PostRef | null> => {
+    const bySlug = await prisma.post.findUnique({
+      where: { slug: segment },
+      select: { id: true, slug: true },
+    });
+    if (bySlug) return bySlug;
+    const byId = await prisma.post.findUnique({
+      where: { id: segment },
+      select: { id: true, slug: true },
+    });
+    return byId;
+  },
+);
 
 /** A single post (any state) by id, rendered in `locale` when provided. */
 export async function getPostById(

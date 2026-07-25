@@ -10,7 +10,7 @@ import { useLocale, useTranslations } from "next-intl";
  * ShareBar. Rendered as a sibling of the card link (never nested inside the
  * anchor) so its clicks don't trigger navigation.
  */
-export default function CardShare({ id, title }: { id: string; title: string }) {
+export default function CardShare({ slug, title }: { slug: string; title: string }) {
   const t = useTranslations("article");
   const locale = useLocale();
   const [open, setOpen] = useState(false);
@@ -19,7 +19,7 @@ export default function CardShare({ id, title }: { id: string; title: string }) 
 
   function articleUrl(): string {
     const origin = typeof window === "undefined" ? "" : window.location.origin;
-    return `${origin}/${locale}/article/${id}`;
+    return `${origin}/${locale}/article/${slug}`;
   }
 
   // Dismiss the popover on outside click or Escape.

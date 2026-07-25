@@ -5,6 +5,12 @@ import { isCategory } from "@/lib/constants";
 import { locales } from "@/i18n/routing";
 import { translateAll } from "@/lib/translate";
 import { saveImageFromUrl } from "@/lib/upload";
+import { createPostWithUniqueSlug } from "@/lib/postSlug";
+
+/** Public reader URL for a post, preferring its pretty slug over the raw id. */
+function articleUrl(post: { language: string; slug: string | null; id: string }): string {
+  return `/${post.language}/article/${post.slug ?? post.id}`;
+}
 
 // Prisma + remote translation need the Node.js runtime, not the edge runtime.
 export const runtime = "nodejs";
@@ -57,7 +63,8 @@ export async function GET(req: Request) {
       sourceUrl: p.sourceUrl,
       breaking: p.breaking,
       createdAt: p.createdAt,
-      url: `/${p.language}/article/${p.id}`,
+      slug: p.slug,
+      url: articleUrl(p),
     })),
   });
 }
@@ -131,7 +138,10 @@ export async function POST(req: Request) {
   if (dedupeKey) {
     const existing = await prisma.post.findUnique({ where: { dedupeKey } });
     if (existing) {
-      return NextResponse.json({ duplicate: true, post: existing }, { status: 200 });
+      return NextResponse.json(
+        { duplicate: true, post: existing, url: articleUrl(existing) },
+        { status: 200 },
+      );
     }
   }
 
@@ -154,29 +164,32 @@ export async function POST(req: Request) {
     language,
   );
 
-  const post = await prisma.post.create({
-    data: {
-      title,
-      excerpt,
-      body: content,
-      translations: JSON.stringify(translations),
-      imageUrl: localImageUrl || null,
-      language,
-      breaking: Boolean(breaking),
-      published: true, // already approved upstream → live now
-      origin: "agent",
-      source: source || null,
-      sourceUrl: sourceUrl || null,
-      dedupeKey: dedupeKey || null,
-      category: {
-        connectOrCreate: { where: { slug: categorySlug }, create: { slug: categorySlug } },
+  const post = await createPostWithUniqueSlug(title, (slug) =>
+    prisma.post.create({
+      data: {
+        slug,
+        title,
+        excerpt,
+        body: content,
+        translations: JSON.stringify(translations),
+        imageUrl: localImageUrl || null,
+        language,
+        breaking: Boolean(breaking),
+        published: true, // already approved upstream → live now
+        origin: "agent",
+        source: source || null,
+        sourceUrl: sourceUrl || null,
+        dedupeKey: dedupeKey || null,
+        category: {
+          connectOrCreate: { where: { slug: categorySlug }, create: { slug: categorySlug } },
+        },
       },
-    },
-    include: { category: true },
-  });
+      include: { category: true },
+    }),
+  );
 
   return NextResponse.json(
-    { duplicate: false, post, url: `/${post.language}/article/${post.id}` },
+    { duplicate: false, post, url: articleUrl(post) },
     { status: 201 },
   );
 }

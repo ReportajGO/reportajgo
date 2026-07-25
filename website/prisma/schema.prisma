@@ -44,6 +44,10 @@ model Category {
 // A single-language news article.
 model Post {
   id        String  @id @default(cuid())
+  // Human- and SEO-friendly URL slug derived from the title (see lib/slug.ts).
+  // Nullable so it can be added to an existing table without downtime, then
+  // backfilled; every new post is created with one. Unique across all posts.
+  slug      String? @unique
   title     String
   excerpt   String
   body      String

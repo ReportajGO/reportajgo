@@ -46,6 +46,7 @@ function editDistance(a: string, b: string, max: number): number {
 
 export type SearchCard = {
   id: string;
+  slug: string; // SEO URL slug (falls back to id for un-backfilled posts)
   title: string;
   excerpt: string;
   category: string;
@@ -82,6 +83,7 @@ async function loadLite(locale: string): Promise<Lite[]> {
     where: { published: true, clearedAt: null },
     select: {
       id: true,
+      slug: true,
       title: true,
       excerpt: true,
       translations: true,
@@ -96,6 +98,7 @@ async function loadLite(locale: string): Promise<Lite[]> {
     const tr = pickLocale(r.translations, locale);
     return {
       id: r.id,
+      slug: r.slug ?? r.id,
       title: tr?.title || r.title,
       excerpt: tr?.excerpt || r.excerpt,
       category: r.category.slug,
@@ -227,6 +230,7 @@ export type Suggestions = {
 
 const toCard = (it: Lite): SearchCard => ({
   id: it.id,
+  slug: it.slug,
   title: it.title,
   excerpt: it.excerpt,
   category: it.category,

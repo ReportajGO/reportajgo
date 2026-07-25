@@ -6,6 +6,7 @@ import { useRouter } from "@/i18n/navigation";
 
 type Card = {
   id: string;
+  slug: string;
   title: string;
   categoryName: string;
   imageUrl: string | null;
@@ -123,7 +124,7 @@ export default function SearchBox({ className = "" }: { className?: string }) {
         label: a.title,
         sub: a.categoryName,
         img: a.imageUrl,
-        href: `/article/${a.id}`,
+        href: `/article/${a.slug}`,
       });
     items.push({ kind: "all", label: q.trim(), href: `/search?q=${encodeURIComponent(q.trim())}` });
   } else {
@@ -133,7 +134,7 @@ export default function SearchBox({ className = "" }: { className?: string }) {
         label: a.title,
         sub: a.categoryName,
         img: a.imageUrl,
-        href: `/article/${a.id}`,
+        href: `/article/${a.slug}`,
       });
     for (const th of data.themes)
       items.push({ kind: "theme", label: th.name, href: `/${th.slug}` });

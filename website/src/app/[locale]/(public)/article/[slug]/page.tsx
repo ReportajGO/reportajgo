@@ -1,7 +1,13 @@
-import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import { notFound, permanentRedirect } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { recordView, getRelatedPosts } from "@/lib/posts";
+import {
+  recordView,
+  getRelatedPosts,
+  getPostById,
+  resolvePostRef,
+} from "@/lib/posts";
 import { wordFor } from "@/lib/constants";
 import { splitLeadingEmoji } from "@/lib/title";
 import Cover from "@/components/Cover";
@@ -12,16 +18,64 @@ import AdSlot from "@/components/AdSlot";
 
 export const dynamic = "force-dynamic";
 
+type ArticleParams = { locale: string; slug: string };
+
+/**
+ * SEO metadata: real title/description plus a canonical URL, so search consoles
+ * index the pretty slug (and treat the legacy id URL as a duplicate of it).
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<ArticleParams>;
+}): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const ref = await resolvePostRef(slug);
+  if (!ref) return {};
+  const post = await getPostById(ref.id, locale);
+  if (!post || !post.published || post.cleared) return {};
+
+  const canonical = `/${locale}/article/${ref.slug ?? ref.id}`;
+  const images = post.imageUrl ? [{ url: post.imageUrl }] : undefined;
+  return {
+    title: post.title,
+    description: post.excerpt,
+    alternates: { canonical },
+    openGraph: {
+      type: "article",
+      title: post.title,
+      description: post.excerpt,
+      url: canonical,
+      ...(images ? { images } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: post.excerpt,
+      ...(post.imageUrl ? { images: [post.imageUrl] } : {}),
+    },
+  };
+}
+
 export default async function ArticlePage({
   params,
 }: {
-  params: Promise<{ locale: string; id: string }>;
+  params: Promise<ArticleParams>;
 }) {
-  const { locale, id } = await params;
+  const { locale, slug } = await params;
   setRequestLocale(locale);
 
+  // Resolve the URL segment (pretty slug or a legacy cuid) to a post.
+  const ref = await resolvePostRef(slug);
+  if (!ref) notFound();
+  // Send legacy id links (or any non-canonical segment) to the slug URL with a
+  // permanent redirect so shared links and search-engine equity carry over.
+  if (ref.slug && ref.slug !== slug) {
+    permanentRedirect(`/${locale}/article/${ref.slug}`);
+  }
+
   // Count this read and render with the fresh view total.
-  const post = await recordView(id, locale);
+  const post = await recordView(ref.id, locale);
   if (!post || !post.published || post.cleared) notFound();
 
   const t = await getTranslations("article");

@@ -27,8 +27,16 @@ const spaceMono = Space_Mono({
   display: "swap",
 });
 
+// Public site origin used to make canonical/OpenGraph URLs absolute for search
+// engines. Overridable per environment; defaults to the production domain.
+const SITE_URL = process.env.SITE_URL ?? "https://reportajgo.uz";
+
 export const metadata: Metadata = {
-  title: "ReportajGO — World News",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "ReportajGO — World News",
+    template: "%s — ReportajGO",
+  },
   description:
     "World news without the noise. Fast, clear, in three languages (UZ/RU/EN).",
 };

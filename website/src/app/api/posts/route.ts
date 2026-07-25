@@ -7,6 +7,7 @@ import { locales } from "@/i18n/routing";
 import { UploadError } from "@/lib/upload";
 import { parsePostInput, type PostInput } from "@/lib/postPayload";
 import { translateAll } from "@/lib/translate";
+import { createPostWithUniqueSlug } from "@/lib/postSlug";
 
 // GET /api/posts — list all posts (admin).
 export async function GET() {
@@ -55,28 +56,31 @@ export async function POST(req: Request) {
     language,
   );
 
-  const post = await prisma.post.create({
-    data: {
-      title,
-      excerpt,
-      body: content,
-      translations: JSON.stringify(translations),
-      imageUrl: imageUrl || null,
-      aspect: aspect && isAspect(aspect) ? aspect : "16:9",
-      gallery: gallery && gallery.length ? JSON.stringify(gallery) : null,
-      language,
-      breaking: Boolean(breaking),
-      published: published === undefined ? true : Boolean(published),
-      category: {
-        connectOrCreate: {
-          where: { slug: category },
-          create: { slug: category },
+  const post = await createPostWithUniqueSlug(title, (slug) =>
+    prisma.post.create({
+      data: {
+        slug,
+        title,
+        excerpt,
+        body: content,
+        translations: JSON.stringify(translations),
+        imageUrl: imageUrl || null,
+        aspect: aspect && isAspect(aspect) ? aspect : "16:9",
+        gallery: gallery && gallery.length ? JSON.stringify(gallery) : null,
+        language,
+        breaking: Boolean(breaking),
+        published: published === undefined ? true : Boolean(published),
+        category: {
+          connectOrCreate: {
+            where: { slug: category },
+            create: { slug: category },
+          },
         },
+        ...(author ? { author: { connect: { id: author.id } } } : {}),
       },
-      ...(author ? { author: { connect: { id: author.id } } } : {}),
-    },
-    include: { category: true },
-  });
+      include: { category: true },
+    }),
+  );
 
   return NextResponse.json(post, { status: 201 });
 }

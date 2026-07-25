@@ -11,7 +11,7 @@ export default async function LeadStory({ post }: { post: PostDTO }) {
   const { emoji, text: titleText } = splitLeadingEmoji(post.title);
 
   return (
-    <Link href={`/article/${post.id}`} className="group block">
+    <Link href={`/article/${post.slug}`} className="group block">
       <div className="relative">
         <Cover
           category={post.category}
