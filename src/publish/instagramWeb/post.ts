@@ -50,6 +50,7 @@ async function doPost(input: InstagramPostInput): Promise<InstagramPostResult> {
     const page = ctx.pages()[0] ?? (await ctx.newPage());
     await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" });
     await ensureLoggedIn(page);
+    await reachFeed(page);
     await dismissDialogs(page);
 
     await openCreate(page);
@@ -122,6 +123,33 @@ async function ensureLoggedIn(page: Page): Promise<void> {
   await page.waitForTimeout(1500);
   if (/\/accounts\/login|\/accounts\/signup/.test(page.url())) {
     throw new Error("Instagram session expired — run `npm run instagram:login` again");
+  }
+}
+
+const NEW_POST_SEL = 'svg[aria-label="New post"], [aria-label="New post"]';
+
+/**
+ * With a restored (seeded) session Instagram intermittently lands on a Meta
+ * "Continue as <account>" / saved-login chooser instead of the feed — and
+ * clicking "Continue" there demands the account password (a dead end for
+ * automation). Instead we wait for the real feed (the "New post" control) and,
+ * if it isn't there, RE-NAVIGATE so the sessionid cookie authenticates directly.
+ * We never touch the chooser. No-op once the feed is up.
+ */
+async function reachFeed(page: Page): Promise<void> {
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    if (
+      await page
+        .locator(NEW_POST_SEL)
+        .first()
+        .isVisible({ timeout: 9000 })
+        .catch(() => false)
+    ) {
+      return;
+    }
+    log.warn({ attempt, url: page.url() }, "not on the Instagram feed yet; re-navigating");
+    await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" }).catch(() => {});
+    await page.waitForTimeout(2500);
   }
 }
 
