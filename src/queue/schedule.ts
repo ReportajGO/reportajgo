@@ -1,11 +1,14 @@
 import { env } from "../config/env.js";
 import { getRuntimeConfig, setResearchPaused } from "../config/settingsStore.js";
 import { logger } from "../config/logger.js";
-import { pipelineQueue, schedulerQueue } from "./queues.js";
+import { mediaQueue, pipelineQueue, schedulerQueue } from "./queues.js";
 
 const log = logger.child({ module: "schedule" });
 
 const SCAN_INTERVAL_MS = 60_000;
+// Media drains on its own cadence, decoupled from research so a paused pipeline
+// never freezes it. The sweep is a no-op when there's no backlog.
+const MEDIA_SWEEP_INTERVAL_MS = 90_000;
 const RESEARCH_JOB = "research";
 
 /** Remove any existing repeatable research job(s) so we can re-add cleanly. */
@@ -41,6 +44,13 @@ export async function registerRepeatableJobs(): Promise<void> {
     "scan",
     {},
     { repeat: { every: SCAN_INTERVAL_MS }, removeOnComplete: true },
+  );
+  // Independent of researchPaused on purpose: media for already-drafted stories
+  // must keep generating even while research is stopped.
+  await mediaQueue.add(
+    "media-sweep",
+    {},
+    { repeat: { every: MEDIA_SWEEP_INTERVAL_MS }, removeOnComplete: true },
   );
   log.info({ cron: researchCron, tz: env.TZ, researchPaused }, "repeatable jobs registered");
 }

@@ -25,6 +25,9 @@ export const QUEUE_NAMES = {
   publish: "publish",
   // Repeatable scan that finds due posts and enqueues publish jobs.
   scheduler: "scheduler",
+  // Repeatable media sweep — drains PENDING_MEDIA drafts independently of the
+  // research pipeline, so a paused/stopped pipeline can't freeze media forever.
+  media: "media",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

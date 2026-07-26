@@ -1,5 +1,7 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Telegraf } from "telegraf";
+import type { InputMediaPhoto, InputMediaVideo } from "telegraf/types";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { prisma } from "../db/client.js";
@@ -61,11 +63,26 @@ function escapeHtml(s: unknown): string {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Map a served /media/<file> URL back to its local path for upload. */
+/**
+ * Map a served /media/<file> URL back to its local path for upload — but only
+ * when that file actually exists on disk. Media now lives on S3, whose URLs also
+ * contain "/media/"; without the existence check we'd rewrite an S3 URL to a
+ * bogus local path and crash telegraf with ENOENT (which silently killed the
+ * approval cards). Returning undefined makes the caller send Telegram the public
+ * URL directly.
+ */
 function localPathFor(url: string): string | undefined {
   const marker = "/media/";
   const idx = url.indexOf(marker);
-  return idx === -1 ? undefined : join(MEDIA_ROOT, url.slice(idx + marker.length));
+  if (idx === -1) return undefined;
+  const path = join(MEDIA_ROOT, url.slice(idx + marker.length));
+  return existsSync(path) ? path : undefined;
+}
+
+/** Telegram accepts a local file ({ source }) or a public URL string. */
+function mediaSource(url: string): { source: string } | string {
+  const path = localPathFor(url);
+  return path ? { source: path } : url;
 }
 
 interface DraftForApproval {
@@ -91,45 +108,92 @@ function buildCaption(draft: DraftForApproval): string {
   return caption;
 }
 
-function keyboard(draftId: string) {
+// One approvable unit = a news item and all its per-platform drafts (grouped by
+// newsItemId). Approving/rejecting acts on the whole group.
+interface NewsGroup {
+  newsItemId: string;
+  headline: string | null;
+  caption: string; // the website copy, used as the single album caption
+  media: { type: string; url: string }[]; // every platform's READY media, deduped
+  platforms: string[]; // distinct target platforms (for the controls summary)
+}
+
+/** Group-card caption: the website copy (clean — no per-platform line). */
+function buildGroupCaption(input: {
+  headline: string | null;
+  body: string;
+  hashtags: string[];
+  sourceName: string | null;
+}): string {
+  const lines: string[] = [];
+  if (input.headline) lines.push(`📰 <b>${escapeHtml(input.headline)}</b>`, "");
+  lines.push(escapeHtml(input.body));
+  if (input.hashtags.length)
+    lines.push("", escapeHtml(input.hashtags.map((h) => `#${h}`).join(" ")));
+  if (input.sourceName) lines.push("", `— ${escapeHtml(input.sourceName)}`);
+  let caption = lines.join("\n");
+  if (caption.length > CAPTION_CAP) caption = `${caption.slice(0, CAPTION_CAP - 1)}…`;
+  return caption;
+}
+
+/** Group controls: one Approve/Reject for the whole story + Expand. Keyed on newsItemId. */
+function groupKeyboard(newsItemId: string) {
   return {
     inline_keyboard: [
       [
-        { text: "✅ Approve", callback_data: `ap:${draftId}` },
-        { text: "❌ Reject", callback_data: `rj:${draftId}` },
+        { text: "✅ Approve", callback_data: `apg:${newsItemId}` },
+        { text: "❌ Reject", callback_data: `rjg:${newsItemId}` },
       ],
-      [{ text: "⚡ Publish now", callback_data: `pn:${draftId}` }],
+      [{ text: "🔎 Expand (per platform)", callback_data: `exp:${newsItemId}` }],
     ],
   };
 }
 
-async function sendApprovalMessage(chatId: number, draft: DraftForApproval): Promise<void> {
+const ALBUM_MAX = 10; // Telegram media-group hard limit.
+
+/** Build a Telegram media group; the caption rides on the first item only. */
+function albumItems(
+  media: { type: string; url: string }[],
+  caption: string,
+): (InputMediaPhoto | InputMediaVideo)[] {
+  return media.slice(0, ALBUM_MAX).map((m, i) => {
+    const head = i === 0 ? { caption, parse_mode: "HTML" as const } : {};
+    return m.type === "VIDEO"
+      ? ({ type: "video", media: mediaSource(m.url), ...head } as InputMediaVideo)
+      : ({ type: "photo", media: mediaSource(m.url), ...head } as InputMediaPhoto);
+  });
+}
+
+/**
+ * Send ONE grouped approval card for a news item: the website copy as the single
+ * caption plus every platform's photo as an album. Telegram albums can't carry
+ * inline buttons, so ≥2 photos post as an album followed by a compact controls
+ * message; 0–1 media collapse into a single captioned message that holds the
+ * buttons directly.
+ */
+async function sendGroupApprovalCard(chatId: number, g: NewsGroup): Promise<void> {
   if (!bot) return;
-  const caption = buildCaption(draft);
-  // Prefer the Reel video so the approver reviews the actual clip before it
-  // posts; fall back to the image, then text-only.
-  const video = draft.media.find((m) => m.type === "VIDEO");
-  const image = draft.media.find((m) => m.type === "IMAGE");
-  if (video) {
-    const path = localPathFor(video.url);
-    await bot.telegram.sendVideo(chatId, path ? { source: path } : video.url, {
-      caption,
-      parse_mode: "HTML",
-      reply_markup: keyboard(draft.id),
-    });
-  } else if (image) {
-    const path = localPathFor(image.url);
-    await bot.telegram.sendPhoto(chatId, path ? { source: path } : image.url, {
-      caption,
-      parse_mode: "HTML",
-      reply_markup: keyboard(draft.id),
-    });
-  } else {
-    await bot.telegram.sendMessage(chatId, caption, {
-      parse_mode: "HTML",
-      reply_markup: keyboard(draft.id),
-    });
+  const controls = groupKeyboard(g.newsItemId);
+  const media = g.media.slice(0, ALBUM_MAX);
+
+  if (media.length >= 2) {
+    await bot.telegram.sendMediaGroup(chatId, albumItems(media, g.caption));
+    const summary = [
+      g.headline ? `📰 <b>${escapeHtml(g.headline)}</b>` : "Review &amp; approve",
+      `🖼️ ${media.length} photos · 🌐 ${escapeHtml(g.platforms.join(", "))}`,
+    ].join("\n");
+    await bot.telegram.sendMessage(chatId, summary, { parse_mode: "HTML", reply_markup: controls });
+    return;
   }
+  const only = media[0];
+  if (only) {
+    const src = mediaSource(only.url);
+    const extra = { caption: g.caption, parse_mode: "HTML" as const, reply_markup: controls };
+    if (only.type === "VIDEO") await bot.telegram.sendVideo(chatId, src, extra);
+    else await bot.telegram.sendPhoto(chatId, src, extra);
+    return;
+  }
+  await bot.telegram.sendMessage(chatId, g.caption, { parse_mode: "HTML", reply_markup: controls });
 }
 
 // ── periodic sweep: push un-sent ready drafts to approvers ───────────────────
@@ -149,82 +213,64 @@ async function sweep(): Promise<void> {
       newsItem: { select: { sourceName: true, sourceUrl: true } },
     },
     orderBy: { createdAt: "asc" },
-    take: 30,
+    take: 60,
   })) as unknown as (DraftForApproval & { newsItemId: string })[];
 
-  // One approval card per news item — prefer the TELEGRAM preview for the
-  // headline/caption. Approving it cascades to the other platforms automatically.
-  const byNews = new Map<string, (typeof drafts)[number]>();
-  // Merge media across ALL of an item's drafts so the card can show the Reel
-  // (on the Instagram draft) even though the TELEGRAM draft is the representative.
-  const mediaByNews = new Map<string, { type: string; url: string }[]>();
-  // Every pending draft per item, so a card can fall back to a text-capable
-  // sibling when the preferred representative can't post without media.
-  const allByNews = new Map<string, (typeof drafts)[number][]>();
+  // One card per news item: group its per-platform drafts by newsItemId.
+  const groups = new Map<string, (typeof drafts)[number][]>();
   for (const d of drafts) {
-    const current = byNews.get(d.newsItemId);
-    if (!current || (d.platform === "TELEGRAM" && current.platform !== "TELEGRAM")) {
-      byNews.set(d.newsItemId, d);
-    }
-    const acc = mediaByNews.get(d.newsItemId) ?? [];
-    acc.push(...d.media);
-    mediaByNews.set(d.newsItemId, acc);
-    const siblings = allByNews.get(d.newsItemId) ?? [];
-    siblings.push(d);
-    allByNews.set(d.newsItemId, siblings);
+    const arr = groups.get(d.newsItemId) ?? [];
+    arr.push(d);
+    groups.set(d.newsItemId, arr);
   }
 
-  // Send a card as soon as ANY of the item's drafts has ready media — don't wait
-  // for slower siblings (e.g. the Instagram Reel video, which takes minutes). When
-  // a still-rendering sibling becomes ready later it moves to PENDING_APPROVAL and
-  // the next sweep sends its own follow-up card. Approving a card only schedules
-  // siblings whose media is already READY (see approveDraft), so nothing publishes
-  // without its media.
-  let withheld = 0;
-  for (const preferred of byNews.values()) {
-    const media = mediaByNews.get(preferred.newsItemId) ?? [];
-    let rep = preferred;
+  for (const [newsItemId, siblings] of groups) {
+    // Caption from the WEBSITE copy; fall back to any text-capable sibling, then
+    // to the first draft. Website/Telegram are mediaRequired:false so the caption
+    // always renders even when an image is still (or never) generating.
+    const captionDraft =
+      siblings.find((d) => d.platform === "WEBSITE") ??
+      siblings.find((d) => !profileFor(d.platform as Platform).mediaRequired) ??
+      siblings[0]!;
 
-    // No ready media for this item. A broken image provider must not silently
-    // stall the whole approval queue — it stalls it forever, since approvalSentAt
-    // stays null and every later sweep skips the same items again. Telegram and
-    // the website are mediaRequired:false and approveDraft accepts them
-    // text-only, so fall back to such a sibling and send the card without an
-    // image. Only withhold when every pending draft for the item needs media.
-    if (env.MEDIA_GENERATION_ENABLED && media.length === 0
-        && profileFor(rep.platform as Platform).mediaRequired) {
-      const textCapable = (allByNews.get(preferred.newsItemId) ?? []).find(
-        (d) => !profileFor(d.platform as Platform).mediaRequired,
-      );
-      if (!textCapable) {
-        withheld++;
-        continue;
+    // Every platform's READY media, de-duplicated by URL, for the album.
+    const seen = new Set<string>();
+    const media: { type: string; url: string }[] = [];
+    for (const d of siblings) {
+      for (const m of d.media) {
+        if (seen.has(m.url)) continue;
+        seen.add(m.url);
+        media.push(m);
       }
-      rep = textCapable;
     }
 
-    // Show the Reel (video) when the item has one; keep the rep's headline/text.
-    const draft = { ...rep, media };
+    const group: NewsGroup = {
+      newsItemId,
+      headline: captionDraft.headline,
+      caption: buildGroupCaption({
+        headline: captionDraft.headline,
+        body: captionDraft.body,
+        hashtags: captionDraft.hashtags,
+        sourceName: captionDraft.newsItem?.sourceName ?? null,
+      }),
+      media,
+      platforms: [...new Set(siblings.map((d) => d.platform))],
+    };
+
     try {
-      for (const chat of approvers) await sendApprovalMessage(chat, draft);
-      // Silence the sibling cards for this news item — they're approved together.
+      for (const chat of approvers) await sendGroupApprovalCard(chat, group);
+      // Silence the sibling cards for this news item — approved together as a group.
       await prisma.postDraft.updateMany({
-        where: { newsItemId: draft.newsItemId, status: "PENDING_APPROVAL", approvalSentAt: null },
+        where: { newsItemId, status: "PENDING_APPROVAL", approvalSentAt: null },
         data: { approvalSentAt: new Date() },
       });
-      log.info({ draftId: draft.id, newsItemId: draft.newsItemId }, "approval message sent");
+      log.info(
+        { newsItemId, platforms: group.platforms, media: media.length },
+        "group approval card sent",
+      );
     } catch (err) {
-      log.error({ err, draftId: draft.id }, "failed to send approval message");
+      log.error({ err, newsItemId }, "failed to send group approval card");
     }
-  }
-
-  // Never let a stalled queue be silent: this is the one path that produces
-  // "the bot stopped sending approvals" with no other symptom.
-  if (withheld > 0) {
-    log.warn(
-      { withheld },
-      "approval cards withheld — media-required drafts have no READY media; check the image provider",
-    );
   }
 }
 
@@ -412,6 +458,89 @@ export function startApprovalBot(): { stop: () => void } | undefined {
     } catch (err) {
       log.error({ err }, "reject callback failed");
       await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true });
+    }
+  });
+
+  // ── grouped-card actions (keyed on newsItemId) ─────────────────────────────
+  // Approve the whole story: approveDraft cascades to every ready sibling.
+  bot.action(/^apg:(.+)$/, async (ctx) => {
+    const newsItemId = ctx.match[1]!;
+    try {
+      const rep = await prisma.postDraft.findFirst({
+        where: { newsItemId, status: "PENDING_APPROVAL" },
+        select: { id: true },
+      });
+      if (!rep) {
+        await ctx.answerCbQuery("Already handled or not ready yet.", { show_alert: true });
+        return;
+      }
+      await approveDraft(rep.id, {
+        scheduledAt: new Date().toISOString(),
+        approver: `tg:${ctx.from?.id ?? "unknown"}`,
+      });
+      await scanNow(); // publish right away — no 60s wait
+      await ctx.answerCbQuery("Approved & publishing ✓");
+      await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+      await ctx.reply("✅ Approved — publishing all platforms now.");
+    } catch (err) {
+      log.error({ err }, "group approve callback failed");
+      await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true });
+    }
+  });
+
+  // Reject the whole story: every pending sibling → REJECTED.
+  bot.action(/^rjg:(.+)$/, async (ctx) => {
+    const newsItemId = ctx.match[1]!;
+    try {
+      const res = await prisma.postDraft.updateMany({
+        where: { newsItemId, status: { in: ["PENDING_APPROVAL", "PENDING_MEDIA"] } },
+        data: { status: "REJECTED", rejectedReason: "rejected via Telegram (group)" },
+      });
+      await ctx.answerCbQuery(`Rejected ${res.count} post(s).`);
+      await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+      await ctx.reply("❌ Rejected the whole story.");
+    } catch (err) {
+      log.error({ err }, "group reject callback failed");
+      await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true });
+    }
+  });
+
+  // Expand: post each platform's own caption + its media so the operator can
+  // review every variant before approving the group.
+  bot.action(/^exp:(.+)$/, async (ctx) => {
+    const newsItemId = ctx.match[1]!;
+    const chatId = ctx.chat?.id;
+    if (!bot || !chatId) return;
+    try {
+      const drafts = (await prisma.postDraft.findMany({
+        where: { newsItemId, status: { in: ["PENDING_APPROVAL", "PENDING_MEDIA", "SCHEDULED"] } },
+        include: {
+          media: { where: { status: "READY" }, select: { type: true, url: true } },
+          newsItem: { select: { sourceName: true, sourceUrl: true } },
+        },
+        orderBy: { platform: "asc" },
+      })) as unknown as DraftForApproval[];
+      if (drafts.length === 0) {
+        await ctx.answerCbQuery("Nothing to expand.");
+        return;
+      }
+      await ctx.answerCbQuery("Expanding…");
+      for (const d of drafts) {
+        const caption = buildCaption(d);
+        const media =
+          d.media.find((m) => m.type === "VIDEO") ?? d.media.find((m) => m.type === "IMAGE");
+        if (media) {
+          const src = mediaSource(media.url);
+          if (media.type === "VIDEO")
+            await bot.telegram.sendVideo(chatId, src, { caption, parse_mode: "HTML" });
+          else await bot.telegram.sendPhoto(chatId, src, { caption, parse_mode: "HTML" });
+        } else {
+          await bot.telegram.sendMessage(chatId, caption, { parse_mode: "HTML" });
+        }
+      }
+    } catch (err) {
+      log.error({ err }, "expand callback failed");
+      await ctx.answerCbQuery("Couldn't expand. Try again.", { show_alert: true });
     }
   });
 

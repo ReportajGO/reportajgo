@@ -2,7 +2,7 @@ import { Worker } from "bullmq";
 import { logger } from "../config/logger.js";
 import { getRuntimeConfig, isResearchPaused } from "../config/settingsStore.js";
 import { publishAllPending } from "../dashboard/controlService.js";
-import { generateMediaForPendingDrafts } from "../generate/media/mediaService.js";
+import { sweepPendingMedia } from "../generate/media/mediaSweep.js";
 import { runResearchPipeline } from "../pipeline/researchPipeline.js";
 import { publishScheduledPost } from "../publish/publishService.js";
 import { deleteStaleNews } from "../scheduler/cleanup.js";
@@ -43,7 +43,7 @@ export function startWorkers(): Worker[] {
         return { ...research, paused: true };
       }
 
-      const media = await generateMediaForPendingDrafts();
+      const media = await sweepPendingMedia();
       // Auto-publish mode ("share itself"): approve + publish everything ready,
       // no human approval step.
       const { autoPublish } = await getRuntimeConfig();
@@ -74,7 +74,16 @@ export function startWorkers(): Worker[] {
     { connection },
   );
 
-  const all = [pipeline, publish, scheduler];
+  // Drain PENDING_MEDIA drafts on a fixed cadence, decoupled from research so a
+  // paused/stopped pipeline can't strand media forever. Lock-guarded internally,
+  // so it never double-generates alongside the pipeline's own sweep.
+  const media = new Worker(
+    QUEUE_NAMES.media,
+    async () => sweepPendingMedia(),
+    { connection },
+  );
+
+  const all = [pipeline, publish, scheduler, media];
   for (const w of all) {
     w.on("failed", (job, err) =>
       log.error({ queue: w.name, jobId: job?.id, err: err.message }, "job failed"),
