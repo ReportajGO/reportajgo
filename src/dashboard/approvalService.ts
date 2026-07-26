@@ -6,6 +6,31 @@ import type { Platform } from "../domain/types.js";
 
 const log = logger.child({ module: "approval" });
 
+// Auto-spacing: approved stories are queued at the next free N-minute slot so
+// they publish as a steady drip instead of all at once. Tunable via env
+// (SCHEDULE_GAP_MINUTES), default 15.
+const SCHEDULE_GAP_MINUTES = Number(process.env.SCHEDULE_GAP_MINUTES) || 15;
+const SCHEDULE_GAP_MS = SCHEDULE_GAP_MINUTES * 60_000;
+// Ignore queue history older than this when finding the last slot, so a long
+// quiet period resets the drip to "now" instead of stacking far into the future.
+const SLOT_LOOKBACK_MS = 6 * 60 * 60_000;
+
+/**
+ * The next free publish slot: SCHEDULE_GAP after the latest recently-queued post
+ * (across any status, so spacing survives a post going live), or now if the
+ * queue has been idle. Consecutive approvals therefore land at now, +15m, +30m…
+ */
+async function nextScheduleSlot(): Promise<Date> {
+  const now = Date.now();
+  const last = await prisma.scheduledPost.findFirst({
+    where: { scheduledAt: { gte: new Date(now - SLOT_LOOKBACK_MS) } },
+    orderBy: { scheduledAt: "desc" },
+    select: { scheduledAt: true },
+  });
+  const base = last ? Math.max(now, last.scheduledAt.getTime() + SCHEDULE_GAP_MS) : now;
+  return new Date(base);
+}
+
 /** Drafts awaiting human review, with their media + source news. */
 export async function listPendingDrafts() {
   return prisma.postDraft.findMany({
@@ -21,7 +46,8 @@ export async function listPendingDrafts() {
 export interface ApproveInput {
   body?: string;
   hashtags?: string[];
-  scheduledAt: string; // ISO 8601
+  scheduledAt?: string; // ISO 8601; ignored when `spaced` is true
+  spaced?: boolean; // auto-schedule at the next free 15-min slot (drip feed)
   approver?: string;
 }
 
@@ -36,7 +62,9 @@ export interface ApproveInput {
  * Creates/replaces each ScheduledPost so the scanner will publish them.
  */
 export async function approveDraft(draftId: string, input: ApproveInput) {
-  const when = new Date(input.scheduledAt);
+  // `spaced` queues this story at the next free 15-min slot (all its platforms
+  // share that one slot); otherwise use the caller's explicit time.
+  const when = input.spaced ? await nextScheduleSlot() : new Date(input.scheduledAt ?? "");
   if (Number.isNaN(when.getTime())) throw new Error("invalid scheduledAt");
 
   const draft = await prisma.postDraft.findUnique({ where: { id: draftId } });

@@ -67,6 +67,7 @@ const I18N = {
     publishNow: "Publish now", t_publishing: "Publishing now…", zoomHint: "click to enlarge",
     expandGroup: "▾ Per platform", collapseGroup: "▴ Hide platforms",
     rejectGroupQ: "Reject the whole story (all platforms)?",
+    autoScheduleNote: "🕒 Auto-scheduled — publishes at the next free 15-min slot",
   },
   uz: {
     appTitle: "· Boshqaruv paneli", systemStatus: "Tizim holati",
@@ -117,6 +118,7 @@ const I18N = {
     publishNow: "Hozir e’lon qilish", t_publishing: "Hozir e’lon qilinmoqda…", zoomHint: "kattalashtirish uchun bosing",
     expandGroup: "▾ Platformalar bo‘yicha", collapseGroup: "▴ Yashirish",
     rejectGroupQ: "Butun xabar rad etilsinmi (barcha platformalar)?",
+    autoScheduleNote: "🕒 Avtomatik rejalashtirildi — keyingi bo‘sh 15-daqiqalik oraliqda e’lon qilinadi",
   },
   ru: {
     appTitle: "· Панель управления", systemStatus: "Состояние системы",
@@ -167,6 +169,7 @@ const I18N = {
     publishNow: "Опубликовать сейчас", t_publishing: "Публикуется сейчас…", zoomHint: "нажмите, чтобы увеличить",
     expandGroup: "▾ По платформам", collapseGroup: "▴ Скрыть",
     rejectGroupQ: "Отклонить всю новость (все платформы)?",
+    autoScheduleNote: "🕒 Автопланирование — публикация в ближайший свободный 15-мин слот",
   },
 };
 
@@ -520,10 +523,7 @@ function groupPendingCard(drafts) {
       </div>
       <h3>${esc(rep.headline?.trim() || rep.newsItem?.title || "")}</h3>
       <p class="group-preview">${esc(preview.slice(0, 240))}${preview.length > 240 ? "…" : ""}</p>
-      <div class="form-grid">
-        <div><label>${t("scheduleLocal")}</label>
-          <input type="datetime-local" class="f-when" value="${defaultWhen()}" /></div>
-      </div>
+      <p class="group-schedule-note">${t("autoScheduleNote")}</p>
       <div class="actions f-act">
         <button class="primary f-publish-now">${t("publishNow")}</button>
         <button class="ok f-approve">${t("approve")}</button>
@@ -559,12 +559,11 @@ function groupPendingCard(drafts) {
   // ready sibling, so one click schedules all platforms.
   node.querySelector(".f-approve").addEventListener("click", (e) =>
     withBusy(e.target, async () => {
-      const whenLocal = node.querySelector(".f-when").value;
-      if (!whenLocal) throw new Error(t("t_pickTime"));
+      // Auto-space: the server queues this story at the next free 15-min slot.
       await api(`/drafts/${rep.id}/approve`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scheduledAt: new Date(whenLocal).toISOString() }),
+        body: JSON.stringify({ spaced: true }),
       });
       toast(t("t_approved"));
       node.remove();

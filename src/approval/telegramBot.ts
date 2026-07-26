@@ -418,13 +418,13 @@ export function startApprovalBot(): { stop: () => void } | undefined {
     const id = ctx.match[1]!;
     try {
       await approveDraft(id, {
-        scheduledAt: new Date().toISOString(),
+        spaced: true, // queue at the next free 15-min slot (drip feed)
         approver: `tg:${ctx.from?.id ?? "unknown"}`,
       });
-      await scanNow(); // publish right away (website first, then channel) — no 60s wait
-      await ctx.answerCbQuery("Approved & publishing ✓");
+      await scanNow(); // publish the first/due slot right away — no 60s wait
+      await ctx.answerCbQuery("Approved & queued ✓");
       await ctx.editMessageReplyMarkup(undefined).catch(() => {});
-      await ctx.reply("✅ Approved — publishing the website article and channel post now.");
+      await ctx.reply("✅ Approved — queued to publish (auto-spaced every 15 min).");
     } catch (err) {
       log.error({ err }, "approve callback failed");
       await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true });
@@ -475,13 +475,13 @@ export function startApprovalBot(): { stop: () => void } | undefined {
         return;
       }
       await approveDraft(rep.id, {
-        scheduledAt: new Date().toISOString(),
+        spaced: true, // queue at the next free 15-min slot (drip feed)
         approver: `tg:${ctx.from?.id ?? "unknown"}`,
       });
-      await scanNow(); // publish right away — no 60s wait
-      await ctx.answerCbQuery("Approved & publishing ✓");
+      await scanNow(); // publish the first/due slot right away — no 60s wait
+      await ctx.answerCbQuery("Approved & queued ✓");
       await ctx.editMessageReplyMarkup(undefined).catch(() => {});
-      await ctx.reply("✅ Approved — publishing all platforms now.");
+      await ctx.reply("✅ Approved — queued to publish (auto-spaced every 15 min).");
     } catch (err) {
       log.error({ err }, "group approve callback failed");
       await ctx.answerCbQuery("Something went wrong. Try again.", { show_alert: true });

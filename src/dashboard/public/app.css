@@ -322,6 +322,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); bo
 .media-strip .gm.zoomable { cursor: zoom-in; }
 .group-card .meta { flex-wrap: wrap; gap: 6px; }
 .group-preview { color: var(--muted); font-size: 0.88rem; line-height: 1.55; margin: 0; }
+.group-schedule-note { color: var(--muted); font-size: 0.82rem; margin: 0; opacity: 0.85; }
 .group-children { display: grid; gap: 14px; margin-top: 4px; border-top: 1px solid var(--faint); padding-top: 14px; }
 .group-children .card { grid-template-columns: 1fr; border: 1px solid var(--faint); border-radius: 12px; }
 .group-children .media { min-height: 160px; }

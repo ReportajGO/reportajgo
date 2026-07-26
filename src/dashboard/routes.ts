@@ -50,11 +50,12 @@ api.get("/drafts", async (_req, res) => {
 
 api.post("/drafts/:id/approve", async (req, res) => {
   try {
-    const { body, hashtags, scheduledAt, approver } = req.body ?? {};
-    if (!scheduledAt) {
+    const { body, hashtags, scheduledAt, approver, spaced } = req.body ?? {};
+    // `spaced` lets the server pick the next free 15-min slot, so a time isn't required.
+    if (!spaced && !scheduledAt) {
       return res.status(400).json({ ok: false, error: "scheduledAt is required" });
     }
-    const result = await approveDraft(req.params.id, { body, hashtags, scheduledAt, approver });
+    const result = await approveDraft(req.params.id, { body, hashtags, scheduledAt, spaced, approver });
     res.json({ ok: true, data: result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
