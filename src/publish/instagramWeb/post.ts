@@ -147,10 +147,64 @@ async function reachFeed(page: Page): Promise<void> {
     ) {
       return;
     }
-    log.warn({ attempt, url: page.url() }, "not on the Instagram feed yet; re-navigating");
-    await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" }).catch(() => {});
+    log.warn({ attempt, url: page.url() }, "not on the Instagram feed yet");
+    // If a password challenge is up and a password is configured, answer it;
+    // otherwise re-navigate so the sessionid cookie can authenticate directly.
+    const answered = await passPasswordChallenge(page);
+    if (!answered) {
+      await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" }).catch(() => {});
+    }
     await page.waitForTimeout(2500);
   }
+}
+
+/**
+ * Answer Instagram's "Continue as <account>" saved-login password challenge with
+ * the configured INSTAGRAM_PASSWORD, IF one is set and the challenge is showing.
+ * Returns true when a password was submitted (caller re-checks the feed), false
+ * when there's nothing to do. Throws on a 2FA code prompt (automation can't
+ * solve it). Automated password entry is bot-risky — this only fires as a
+ * fallback when the cookie session alone didn't reach the feed.
+ */
+async function passPasswordChallenge(page: Page): Promise<boolean> {
+  if (!env.INSTAGRAM_PASSWORD) return false;
+  // Reveal the password field: click "Continue as <account>" if it's a chooser.
+  await clickFirst(page, ['[aria-label^="Continue "]'], 4000).catch(() => false);
+  await page.waitForTimeout(1500);
+
+  const pw = page
+    .locator('input[aria-label="Profile Password Entry"], input[name="pass"], input[type="password"]')
+    .first();
+  if (!(await pw.isVisible().catch(() => false))) return false;
+
+  log.info("answering Instagram password challenge with the stored password");
+  await pw.fill(env.INSTAGRAM_PASSWORD).catch(() => {});
+  const submitted = await clickFirst(
+    page,
+    [
+      'div[role="button"][aria-label*="ontinue"]',
+      'button[type="submit"]',
+      'div[role="button"]:has-text("Continue")',
+      'button:has-text("Log in")',
+      'button:has-text("Log In")',
+    ],
+    3000,
+  );
+  if (!submitted) await page.keyboard.press("Enter").catch(() => {});
+  await page.waitForTimeout(4000);
+
+  const needs2fa = await page
+    .getByText(/security code|two-factor|verification code|confirmation code|enter the code|6-digit/i)
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (needs2fa) {
+    throw new Error(
+      "Instagram asked for a 2FA code — automated password login can't continue. " +
+        "Turn off 2FA for this account, or switch to the Meta Graph API.",
+    );
+  }
+  return true;
 }
 
 /** Click the first locator that becomes visible within the timeout. */

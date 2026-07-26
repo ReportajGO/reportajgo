@@ -226,6 +226,12 @@ const schema = z.object({
   // Browser channel ("chrome" = real Google Chrome, least detectable; empty =
   // Playwright's bundled Chromium).
   INSTAGRAM_BROWSER_CHANNEL: z.string().default("chrome"),
+  // Optional account password, used ONLY to answer Instagram's "Continue as /
+  // enter password" saved-login challenge when it appears (see reachFeed in
+  // post.ts). Empty = never type a password (safer default). Automated password
+  // entry is more bot-like and CANNOT pass a 2FA code prompt — if the account
+  // has 2FA on, use the Meta Graph API instead. Never logged.
+  INSTAGRAM_PASSWORD: z.string().default(""),
   // Where screenshots/HTML are dumped when a posting step fails.
   INSTAGRAM_DEBUG_DIR: z.string().default(".instagram-debug"),
   // Dry run: drive the whole web Create flow (login, open create, upload, caption)
