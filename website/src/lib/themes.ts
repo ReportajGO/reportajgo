@@ -1,6 +1,7 @@
 // Theme (category/section) read layer. Themes are DB-driven — each one mirrors
 // a topic filter the operator added in the agent (synced via /api/agent/themes).
 // Used by the nav, homepage bands and the /[locale]/[slug] theme pages.
+import { cache } from "react";
 import { prisma } from "./prisma";
 import { colorFor, wordFor } from "./constants";
 
@@ -87,12 +88,15 @@ export async function getThemeStats(locale: string): Promise<ThemeStat[]> {
   });
 }
 
-/** A single active theme by slug, or null if missing/hidden. */
-export async function getThemeBySlug(
-  slug: string,
-  locale: string,
-): Promise<Theme | null> {
-  const r = await prisma.category.findUnique({ where: { slug } });
-  if (!r || !r.active) return null;
-  return toTheme(r, locale);
-}
+/**
+ * A single active theme by slug, or null if missing/hidden. Wrapped in React
+ * `cache()` so a category page's `generateMetadata` and its render share one
+ * query within the same request.
+ */
+export const getThemeBySlug = cache(
+  async (slug: string, locale: string): Promise<Theme | null> => {
+    const r = await prisma.category.findUnique({ where: { slug } });
+    if (!r || !r.active) return null;
+    return toTheme(r, locale);
+  },
+);

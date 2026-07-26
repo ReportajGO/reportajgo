@@ -10,6 +10,9 @@ import {
 } from "@/lib/posts";
 import { wordFor } from "@/lib/constants";
 import { splitLeadingEmoji } from "@/lib/title";
+import { buildAlternates } from "@/lib/seo";
+import { newsArticleLd, breadcrumbLd } from "@/lib/jsonld";
+import JsonLd from "@/components/JsonLd";
 import Cover from "@/components/Cover";
 import Meta from "@/components/Meta";
 import NewsCard from "@/components/NewsCard";
@@ -35,24 +38,29 @@ export async function generateMetadata({
   const post = await getPostById(ref.id, locale);
   if (!post || !post.published || post.cleared) return {};
 
-  const canonical = `/${locale}/article/${ref.slug ?? ref.id}`;
-  const images = post.imageUrl ? [{ url: post.imageUrl }] : undefined;
+  const pathNoLocale = `/article/${ref.slug ?? ref.id}`;
+  const canonical = `/${locale}${pathNoLocale}`;
+  // Always emit an og:image (overriding openGraph drops the layout default, so
+  // fall back to the branded card for image-less posts).
+  const image = post.imageUrl ?? "/og-default.png";
   return {
     title: post.title,
     description: post.excerpt,
-    alternates: { canonical },
+    alternates: buildAlternates(locale, pathNoLocale), // canonical + hreflang siblings
     openGraph: {
       type: "article",
       title: post.title,
       description: post.excerpt,
       url: canonical,
-      ...(images ? { images } : {}),
+      images: [image],
+      publishedTime: post.createdAt,
+      modifiedTime: post.updatedAt,
     },
     twitter: {
       card: "summary_large_image",
       title: post.title,
       description: post.excerpt,
-      ...(post.imageUrl ? { images: [post.imageUrl] } : {}),
+      images: [image],
     },
   };
 }
@@ -78,7 +86,12 @@ export default async function ArticlePage({
   const post = await recordView(ref.id, locale);
   if (!post || !post.published || post.cleared) notFound();
 
-  const t = await getTranslations("article");
+  const [t, tNav] = await Promise.all([
+    getTranslations("article"),
+    getTranslations("nav"),
+  ]);
+
+  const articlePath = `/${locale}/article/${post.slug}`;
 
   const paragraphs = post.body
     .split(/\n{2,}|\n/)
@@ -110,6 +123,16 @@ export default async function ArticlePage({
 
   return (
     <>
+      <JsonLd
+        data={[
+          newsArticleLd(post, locale, articlePath),
+          breadcrumbLd([
+            { name: tNav("home"), path: `/${locale}` },
+            { name: post.categoryName, path: `/${locale}/${post.category}` },
+            { name: post.title, path: articlePath },
+          ]),
+        ]}
+      />
       <article className="mx-auto max-w-[760px] py-6 sm:py-9">
         <div className="mb-3">
           <Meta

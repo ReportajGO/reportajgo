@@ -1,14 +1,36 @@
+import type { Metadata } from "next";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getPosts } from "@/lib/posts";
 import { getActiveThemes } from "@/lib/themes";
 import { postsForTheme } from "@/lib/search";
+import { buildAlternates } from "@/lib/seo";
+import { websiteLd, organizationLd } from "@/lib/jsonld";
+import JsonLd from "@/components/JsonLd";
 import LeadStory from "@/components/LeadStory";
 import SideItem from "@/components/SideItem";
 import NewsCard from "@/components/NewsCard";
 import AdSlot from "@/components/AdSlot";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "seo" });
+  const title = t("home.title");
+  const description = t("home.description");
+  return {
+    title: { absolute: title }, // already brand-complete; skip the "— ReportajGO" template
+    description,
+    alternates: buildAlternates(locale, ""),
+    openGraph: { title, description, url: `/${locale}` },
+    twitter: { title, description },
+  };
+}
 
 export default async function HomePage({
   params,
@@ -40,6 +62,7 @@ export default async function HomePage({
 
   return (
     <div className="pb-4">
+      <JsonLd data={[websiteLd(locale), organizationLd()]} />
       {/* Lead + trending */}
       <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.65fr_1fr]">
         <LeadStory post={lead} />

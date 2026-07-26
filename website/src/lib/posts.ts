@@ -22,6 +22,7 @@ export type PostDTO = {
   gallery: string[];
   author: string | null;
   createdAt: string;
+  updatedAt: string; // ISO; feeds JSON-LD dateModified + sitemap lastmod
 };
 
 type WithCategoryAuthor = {
@@ -40,6 +41,7 @@ type WithCategoryAuthor = {
   gallery: string | null;
   clearedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
   category: { slug: string; labels: string | null };
   author: { name: string | null } | null;
 };
@@ -91,6 +93,7 @@ function toDTO(p: WithCategoryAuthor, locale?: string): PostDTO {
     gallery: parseGallery(p.gallery),
     author: p.author?.name ?? null,
     createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
   };
 }
 
@@ -211,6 +214,22 @@ export async function getAllPostsAdmin(): Promise<PostDTO[]> {
     orderBy: { createdAt: "desc" },
   });
   return rows.map((r) => toDTO(r));
+}
+
+/**
+ * Minimal public-post list for the XML sitemap: just the slug (id fallback) and
+ * last-modified time, for every published, non-cleared post. Selects only two
+ * columns so building the sitemap never loads article bodies.
+ */
+export async function getSitemapPosts(): Promise<
+  { slug: string; updatedAt: Date }[]
+> {
+  const rows = await prisma.post.findMany({
+    where: { published: true, clearedAt: null },
+    select: { id: true, slug: true, updatedAt: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  return rows.map((r) => ({ slug: r.slug ?? r.id, updatedAt: r.updatedAt }));
 }
 
 /** Live vs cleared (soft-deleted) post counts for the admin Clear/Restore UI. */

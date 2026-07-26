@@ -1,14 +1,37 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { getPosts } from "@/lib/posts";
 import { getThemeBySlug } from "@/lib/themes";
 import { postsForTheme } from "@/lib/search";
+import { buildAlternates } from "@/lib/seo";
+import { breadcrumbLd } from "@/lib/jsonld";
+import JsonLd from "@/components/JsonLd";
 import LeadStory from "@/components/LeadStory";
 import SideItem from "@/components/SideItem";
 import NewsCard from "@/components/NewsCard";
 import AdSlot from "@/components/AdSlot";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; category: string }>;
+}): Promise<Metadata> {
+  const { locale, category } = await params;
+  const theme = await getThemeBySlug(category, locale);
+  if (!theme) return {};
+  const t = await getTranslations({ locale, namespace: "seo" });
+  const description = t("category.description", { name: theme.name });
+  return {
+    title: theme.name, // "-> {name} — ReportajGO" via the layout template
+    description,
+    alternates: buildAlternates(locale, `/${category}`),
+    openGraph: { title: theme.name, description, url: `/${locale}/${category}` },
+    twitter: { title: theme.name, description },
+  };
+}
 
 export default async function CategoryPage({
   params,
@@ -33,6 +56,12 @@ export default async function CategoryPage({
 
   return (
     <div className="pb-4">
+      <JsonLd
+        data={breadcrumbLd([
+          { name: tNav("home"), path: `/${locale}` },
+          { name, path: `/${locale}/${category}` },
+        ])}
+      />
       <div className="mt-7 flex items-center gap-2.5 font-display text-xs font-extrabold uppercase tracking-[.14em] text-brand-red">
         <span className="h-[3px] w-[22px] rounded-sm bg-brand-red" />
         {tNav("home")} · {name}

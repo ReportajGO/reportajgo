@@ -1,4 +1,18 @@
 {
+  "seo": {
+    "siteName": "ReportajGO",
+    "home": {
+      "title": "ReportajGO — dunyo yangiliklari o‘zbek, rus va ingliz tillarida",
+      "description": "Eng muhim dunyo yangiliklari — tez va aniq, uch tilda (UZ/RU/EN)."
+    },
+    "category": {
+      "description": "Eng so‘nggi «{name}» yangiliklari ReportajGO’da — tez va aniq, uch tilda."
+    },
+    "search": {
+      "title": "Qidiruv"
+    },
+    "ogAlt": "ReportajGO — Dunyo yangiliklari"
+  },
   "brand": {
     "slogan": "Yangilik shu yerda"
   },

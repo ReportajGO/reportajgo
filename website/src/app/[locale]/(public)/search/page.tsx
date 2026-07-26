@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { getPosts } from "@/lib/posts";
@@ -5,6 +6,22 @@ import { rankPosts, suggestSpelling } from "@/lib/search";
 import NewsCard from "@/components/NewsCard";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "seo" });
+  // Search-results pages carry no lasting value for the index — keep them out
+  // of it while still letting crawlers follow links through to articles.
+  return {
+    title: t("search.title"),
+    robots: { index: false, follow: true },
+    alternates: { canonical: `/${locale}/search` },
+  };
+}
 
 export default async function SearchPage({
   params,

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -7,6 +8,9 @@ import Logo from "@/components/Logo";
 import AdminProviders from "@/components/admin/AdminProviders";
 import AdminNav from "@/components/admin/AdminNav";
 import SignOutButton from "@/components/admin/SignOutButton";
+
+// The whole admin area is private — keep it out of search indexes.
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default async function AdminLayout({
   children,

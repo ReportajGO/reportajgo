@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { Archivo, Newsreader, Space_Mono } from "next/font/google";
 import { routing, type Locale } from "@/i18n/routing";
+import { SITE_URL } from "@/lib/seo";
 import ThemeProvider from "@/components/ThemeProvider";
 import "../globals.css";
 
@@ -27,18 +28,55 @@ const spaceMono = Space_Mono({
   display: "swap",
 });
 
-// Public site origin used to make canonical/OpenGraph URLs absolute for search
-// engines. Overridable per environment; defaults to the production domain.
-const SITE_URL = process.env.SITE_URL ?? "https://reportajgo.uz";
+// SITE_URL (public origin) is centralized in lib/seo.ts and drives metadataBase
+// so canonical/OpenGraph URLs resolve absolute for search engines. These are
+// site-wide DEFAULTS; per-page generateMetadata overrides title/description/
+// canonical/hreflang where set.
+const SITE_NAME = "ReportajGO";
+const DEFAULT_TITLE = "ReportajGO — World News";
+const DEFAULT_DESCRIPTION =
+  "World news without the noise. Fast, clear, in three languages (UZ/RU/EN).";
+const DEFAULT_OG_IMAGE = {
+  url: "/og-default.png",
+  width: 1200,
+  height: 630,
+  alt: DEFAULT_TITLE,
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "ReportajGO — World News",
+    default: DEFAULT_TITLE,
     template: "%s — ReportajGO",
   },
-  description:
-    "World news without the noise. Fast, clear, in three languages (UZ/RU/EN).",
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  robots: { index: true, follow: true },
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    images: [DEFAULT_OG_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    images: ["/og-default.png"],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e0e11" },
+  ],
 };
 
 export const dynamic = "force-dynamic";

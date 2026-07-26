@@ -1,4 +1,18 @@
 {
+  "seo": {
+    "siteName": "ReportajGO",
+    "home": {
+      "title": "ReportajGO — мировые новости на узбекском, русском и английском",
+      "description": "Главные мировые новости без шума — быстро и ясно, на трёх языках (UZ/RU/EN)."
+    },
+    "category": {
+      "description": "Последние новости раздела «{name}» на ReportajGO — быстро и ясно, на трёх языках."
+    },
+    "search": {
+      "title": "Поиск"
+    },
+    "ogAlt": "ReportajGO — Мировые новости"
+  },
   "brand": {
     "slogan": "Новости здесь"
   },
