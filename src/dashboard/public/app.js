@@ -65,6 +65,8 @@ const I18N = {
     rejectReasonPh: "reason (optional)", rejectConfirmQ: "Reject this post?", newTime: "New time",
     t_restored: "Restored to review", t_rescheduled: "Rescheduled",
     publishNow: "Publish now", t_publishing: "Publishing now…", zoomHint: "click to enlarge",
+    expandGroup: "▾ Per platform", collapseGroup: "▴ Hide platforms",
+    rejectGroupQ: "Reject the whole story (all platforms)?",
   },
   uz: {
     appTitle: "· Boshqaruv paneli", systemStatus: "Tizim holati",
@@ -113,6 +115,8 @@ const I18N = {
     rejectReasonPh: "sabab (ixtiyoriy)", rejectConfirmQ: "Bu post rad etilsinmi?", newTime: "Yangi vaqt",
     t_restored: "Ko‘rib chiqishga tiklandi", t_rescheduled: "Qayta rejalashtirildi",
     publishNow: "Hozir e’lon qilish", t_publishing: "Hozir e’lon qilinmoqda…", zoomHint: "kattalashtirish uchun bosing",
+    expandGroup: "▾ Platformalar bo‘yicha", collapseGroup: "▴ Yashirish",
+    rejectGroupQ: "Butun xabar rad etilsinmi (barcha platformalar)?",
   },
   ru: {
     appTitle: "· Панель управления", systemStatus: "Состояние системы",
@@ -161,6 +165,8 @@ const I18N = {
     rejectReasonPh: "причина (необязательно)", rejectConfirmQ: "Отклонить этот пост?", newTime: "Новое время",
     t_restored: "Возвращено на проверку", t_rescheduled: "Перенесено",
     publishNow: "Опубликовать сейчас", t_publishing: "Публикуется сейчас…", zoomHint: "нажмите, чтобы увеличить",
+    expandGroup: "▾ По платформам", collapseGroup: "▴ Скрыть",
+    rejectGroupQ: "Отклонить всю новость (все платформы)?",
   },
 };
 
@@ -467,6 +473,143 @@ document.addEventListener("click", (e) => {
   if (img) openLightbox(img.src);
 });
 
+/** Media strip: every platform's photo/video as a thumbnail row (the "album"). */
+function groupMediaEl(media) {
+  const items = media || [];
+  if (!items.length) return '<div class="nomedia">—</div>';
+  return items
+    .slice(0, 10)
+    .map((m) => {
+      const src = mediaUrl(m.url);
+      return m.type === "VIDEO"
+        ? `<video src="${esc(src)}" muted loop class="gm"></video>`
+        : `<img src="${esc(src)}" alt="" class="gm zoomable" title="${t("zoomHint")}" />`;
+    })
+    .join("");
+}
+
+/**
+ * One card per news item: the website copy + every platform's photo, with group
+ * Approve/Reject/Publish (approve cascades to all platforms via approveDraft) and
+ * an Expand toggle that reveals each platform's own editor card.
+ */
+function groupPendingCard(drafts) {
+  const rep = drafts.find((d) => d.platform === "WEBSITE") || drafts[0];
+  const platforms = [...new Set(drafts.map((d) => d.platform))];
+  // Merge each platform's READY media, de-duplicated by URL.
+  const seen = new Set();
+  const allMedia = [];
+  for (const d of drafts) {
+    for (const m of d.media || []) {
+      if (seen.has(m.url)) continue;
+      seen.add(m.url);
+      allMedia.push(m);
+    }
+  }
+  const preview = (rep.body ?? "").replace(/\s+/g, " ").trim();
+
+  const node = document.createElement("article");
+  node.className = "card group-card";
+  node.innerHTML = `
+    <div class="media media-strip">${groupMediaEl(allMedia)}</div>
+    <div class="body">
+      <div class="meta">
+        ${platforms.map((p) => `<span class="badge-plat">${esc(p)}</span>`).join(" ")}
+        <span class="src">${esc(rep.newsItem?.sourceName ?? t("sourceWord"))} ·
+          <a href="${esc(safeHref(rep.newsItem?.sourceUrl))}" target="_blank" rel="noopener noreferrer">${t("linkWord")}</a></span>
+      </div>
+      <h3>${esc(rep.headline?.trim() || rep.newsItem?.title || "")}</h3>
+      <p class="group-preview">${esc(preview.slice(0, 240))}${preview.length > 240 ? "…" : ""}</p>
+      <div class="form-grid">
+        <div><label>${t("scheduleLocal")}</label>
+          <input type="datetime-local" class="f-when" value="${defaultWhen()}" /></div>
+      </div>
+      <div class="actions f-act">
+        <button class="primary f-publish-now">${t("publishNow")}</button>
+        <button class="ok f-approve">${t("approve")}</button>
+        <button class="danger f-reject">${t("reject")}</button>
+        <button class="ghost f-expand">${t("expandGroup")} (${drafts.length})</button>
+      </div>
+      <div class="confirm-reject" hidden>
+        <span class="warn-q">⚠ ${t("rejectGroupQ")}</span>
+        <input class="f-reason" placeholder="${t("rejectReasonPh")}" />
+        <div class="actions">
+          <button class="danger sm f-reject-confirm">${t("confirmReject")}</button>
+          <button class="ghost sm f-reject-cancel">${t("cancel")}</button>
+        </div>
+      </div>
+      <div class="group-children" hidden></div>
+    </div>`;
+
+  // Expand → render each platform's own editor card (lazy, once).
+  const children = node.querySelector(".group-children");
+  const expandBtn = node.querySelector(".f-expand");
+  let built = false;
+  expandBtn.addEventListener("click", () => {
+    if (!built) {
+      drafts.forEach((d) => children.appendChild(pendingCard(d)));
+      built = true;
+    }
+    const show = children.hidden;
+    children.hidden = !show;
+    expandBtn.textContent = `${show ? t("collapseGroup") : t("expandGroup")} (${drafts.length})`;
+  });
+
+  // Group approve → approve the representative; approveDraft cascades to every
+  // ready sibling, so one click schedules all platforms.
+  node.querySelector(".f-approve").addEventListener("click", (e) =>
+    withBusy(e.target, async () => {
+      const whenLocal = node.querySelector(".f-when").value;
+      if (!whenLocal) throw new Error(t("t_pickTime"));
+      await api(`/drafts/${rep.id}/approve`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scheduledAt: new Date(whenLocal).toISOString() }),
+      });
+      toast(t("t_approved"));
+      node.remove();
+      loadStatus();
+    }),
+  );
+  node.querySelector(".f-publish-now").addEventListener("click", (e) =>
+    withBusy(e.target, async () => {
+      await api(`/drafts/${rep.id}/publish-now`, { method: "POST" });
+      toast(t("t_publishing"));
+      node.remove();
+      loadStatus();
+    }),
+  );
+
+  // Group reject → reject every platform of the story (double-confirm).
+  const actRow = node.querySelector(".f-act");
+  const confirmRow = node.querySelector(".confirm-reject");
+  node.querySelector(".f-reject").addEventListener("click", () => {
+    actRow.hidden = true;
+    confirmRow.hidden = false;
+    node.querySelector(".f-reason").focus();
+  });
+  node.querySelector(".f-reject-cancel").addEventListener("click", () => {
+    confirmRow.hidden = true;
+    actRow.hidden = false;
+  });
+  node.querySelector(".f-reject-confirm").addEventListener("click", (e) =>
+    withBusy(e.target, async () => {
+      const reason = node.querySelector(".f-reason").value.trim();
+      for (const d of drafts) {
+        await api(`/drafts/${d.id}/reject`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reason }),
+        });
+      }
+      toast(t("t_rejected"));
+      node.remove();
+      loadStatus();
+    }),
+  );
+  return node;
+}
+
 function pendingCard(d) {
   const node = document.createElement("article");
   node.className = "card";
@@ -676,8 +819,18 @@ async function loadTab(status) {
       );
       list.appendChild(bar);
     }
-    const build = status === "PENDING_APPROVAL" ? pendingCard : readonlyCard;
-    posts.forEach((p) => list.appendChild(build(p)));
+    if (status === "PENDING_APPROVAL") {
+      // One card per news item: group its per-platform drafts by newsItemId.
+      const groups = new Map();
+      for (const p of posts) {
+        const arr = groups.get(p.newsItemId) || [];
+        arr.push(p);
+        groups.set(p.newsItemId, arr);
+      }
+      for (const drafts of groups.values()) list.appendChild(groupPendingCard(drafts));
+    } else {
+      posts.forEach((p) => list.appendChild(readonlyCard(p)));
+    }
   } catch (err) {
     list.innerHTML = `<div class="empty">${t("failedToLoad")} ${esc(err.message)}</div>`;
   }
