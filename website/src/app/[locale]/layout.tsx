@@ -70,6 +70,16 @@ export const metadata: Metadata = {
     description: DEFAULT_DESCRIPTION,
     images: ["/og-default.png"],
   },
+  // Search-console ownership tokens. Set the matching env var to the token each
+  // console shows under its "HTML tag" method, then redeploy and click Verify.
+  // Undefined values render no tag, so this is a no-op until a token is set.
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+    yandex: process.env.YANDEX_VERIFICATION,
+    other: process.env.BING_SITE_VERIFICATION
+      ? { "msvalidate.01": process.env.BING_SITE_VERIFICATION }
+      : undefined,
+  },
 };
 
 export const viewport: Viewport = {
