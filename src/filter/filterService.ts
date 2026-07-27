@@ -122,6 +122,7 @@ export async function rankPendingItems(): Promise<{ selected: number; dropped: n
   let selected = 0;
   let dropped = 0;
   let preFiltered = 0;
+  let errored = 0;
 
   for (const item of pending) {
     // 1) Deterministic gate before spending an LLM call.
@@ -136,8 +137,17 @@ export async function rankPendingItems(): Promise<{ selected: number; dropped: n
       continue;
     }
 
-    // 2) Editorial LLM ranking, gated on the runtime thresholds.
-    const verdict = await rankNews(item);
+    // 2) Editorial LLM ranking, gated on the runtime thresholds. On a transient
+    //    ranking failure, leave the item NEW so the next run retries it instead
+    //    of permanently dropping a possibly-newsworthy story.
+    let verdict: RankVerdict;
+    try {
+      verdict = await rankNews(item);
+    } catch (err) {
+      log.warn({ err, id: item.id }, "ranking failed; leaving NEW for retry");
+      errored++;
+      continue;
+    }
     const keep =
       verdict.score >= cfg.minScore &&
       verdict.relevance >= cfg.minRelevance &&
@@ -156,7 +166,7 @@ export async function rankPendingItems(): Promise<{ selected: number; dropped: n
     keep ? selected++ : dropped++;
   }
 
-  log.info({ selected, dropped, preFiltered }, "ranking complete");
+  log.info({ selected, dropped, preFiltered, errored }, "ranking complete");
   return { selected, dropped };
 }
 

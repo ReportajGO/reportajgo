@@ -1,5 +1,5 @@
 import { logger } from "../config/logger.js";
-import { coercePriority } from "../domain/priority.js";
+import { coercePriority, priorityToScore } from "../domain/priority.js";
 import type { RankVerdict } from "../domain/types.js";
 import { generateJson } from "../research/gemini.js";
 
@@ -48,21 +48,26 @@ export async function rankNews(item: {
 
   try {
     const raw = await generateJson<RawVerdict>(prompt);
-    const score = clamp01(raw.score);
-    const relevance = clamp01(raw.relevance);
-    return {
-      score,
-      relevance,
-      priority: coercePriority(raw.priority, score),
-      reasons: raw.reasons ?? "",
-    };
+    // The Gemini call isn't schema-constrained, so tolerate quoted numbers and
+    // missing fields. When a numeric is genuinely absent, derive it from the
+    // (explicit) priority instead of collapsing to 0 — otherwise a real
+    // BREAKING/HIGH story would be silently dropped by the score gate.
+    const rawScore = parseUnit(raw.score);
+    const priority = coercePriority(raw.priority, rawScore ?? 0);
+    const score = rawScore ?? priorityToScore(priority);
+    const relevance = parseUnit(raw.relevance) ?? score;
+    return { score, relevance, priority, reasons: raw.reasons ?? "" };
   } catch (err) {
-    log.warn({ err, title: item.title }, "ranking failed; defaulting to drop");
-    return { score: 0, relevance: 0, priority: "LOW", reasons: "ranking error" };
+    // A transient failure (Gemini outage, malformed JSON) must NOT masquerade as
+    // an editorial reject — that would permanently FILTER_OUT a good item. Throw
+    // so the filter stage leaves it NEW to be re-ranked next run.
+    log.warn({ err, title: item.title }, "ranking failed; leaving item for retry");
+    throw err instanceof Error ? err : new Error("ranking failed");
   }
 }
 
-function clamp01(n: unknown): number {
-  const v = typeof n === "number" ? n : 0;
-  return Math.min(1, Math.max(0, v));
+/** Parse a model-provided 0..1 value, tolerating numeric strings. null if absent/unparseable. */
+function parseUnit(n: unknown): number | null {
+  const v = typeof n === "number" ? n : typeof n === "string" ? Number(n.trim()) : NaN;
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : null;
 }

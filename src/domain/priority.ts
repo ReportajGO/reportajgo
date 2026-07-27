@@ -31,6 +31,24 @@ export function scoreToPriority(score: number): NewsPriority {
   return "LOW";
 }
 
+/**
+ * Representative 0..1 score for a level. Used as the reverse of scoreToPriority
+ * when the model returns a valid priority but no usable numeric score, so an
+ * explicit BREAKING/HIGH isn't nuked to 0 (and dropped) by the score gate.
+ */
+export function priorityToScore(p: NewsPriority): number {
+  switch (p) {
+    case "BREAKING":
+      return 0.9;
+    case "HIGH":
+      return 0.75;
+    case "NORMAL":
+      return 0.55;
+    case "LOW":
+      return 0.25;
+  }
+}
+
 /** Coerce arbitrary model output to a valid level, deriving from score if unusable. */
 export function coercePriority(raw: unknown, score: number): NewsPriority {
   if (typeof raw === "string") {
