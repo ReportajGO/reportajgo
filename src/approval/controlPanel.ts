@@ -6,6 +6,7 @@ import {
   updateRuntimeConfig,
   VALID_PLATFORMS,
 } from "../config/settingsStore.js";
+import type { NewsPriority } from "../domain/types.js";
 import { getStatus, publishAllPending, runPipelineNow } from "../dashboard/controlService.js";
 import { rateLimited } from "./auth.js";
 
@@ -35,6 +36,10 @@ const CRON_PRESETS: { label: string; pattern: string }[] = [
   { label: "Twice daily", pattern: "0 9,18 * * *" },
   { label: "Daily 09:00", pattern: "0 9 * * *" },
 ];
+// Strong-filter tuning presets.
+const SCORE_PRESETS = [0.45, 0.6, 0.7, 0.8];
+const RELEVANCE_PRESETS = [0.3, 0.5, 0.7];
+const PRIORITY_CHOICES: NewsPriority[] = ["LOW", "NORMAL", "HIGH", "BREAKING"];
 
 // chatId -> which value we're waiting for them to type next.
 const pending = new Map<number, "cron" | "topic">();
@@ -65,11 +70,13 @@ export async function mainMenu(): Promise<{ text: string; markup: ReturnType<typ
     `Auto-research: <b>${active ? `ON · ${cfg.researchCron}` : "PAUSED"}</b>\n` +
     `Auto-publish: <b>${cfg.autoPublish ? "ON — posts itself, no approval" : "OFF — approve first"}</b>\n` +
     `Limit: <b>${cfg.maxItemsPerRun}/run</b> · Freshness: <b>${cfg.researchMaxAgeHours}h</b>\n` +
+    `Filter: <b>score ≥ ${cfg.minScore} · priority ≥ ${cfg.minPriority}</b>\n` +
     `Model: <b>${cfg.geminiModel}</b>\n` +
     `Languages: <b>${cfg.contentLanguages.join(", ")}</b>`;
   const markup = Markup.inlineKeyboard([
     [Markup.button.callback("⏰ Schedule", "cp:schedule"), Markup.button.callback(`🔢 Limit (${cfg.maxItemsPerRun})`, "cp:limit")],
     [Markup.button.callback(`🔍 Freshness (${cfg.researchMaxAgeHours}h)`, "cp:freshness"), Markup.button.callback("🧠 AI model", "cp:model")],
+    [Markup.button.callback(`🎯 Filter (≥${cfg.minScore} · ${cfg.minPriority})`, "cp:filter")],
     [Markup.button.callback("📁 Topics", "cp:topics"), Markup.button.callback("🌐 Languages", "cp:langs")],
     [Markup.button.callback("📱 Platforms", "cp:platforms"), Markup.button.callback("📊 Status", "cp:status")],
     [Markup.button.callback(active ? "⏸️ Pause auto-research" : "▶️ Resume auto-research", "cp:togglecron")],
@@ -152,6 +159,27 @@ export function registerControlPanel(bot: Telegraf): void {
     await ctx.answerCbQuery("Freshness updated ✓").catch(() => {});
     const { text, markup } = await mainMenu();
     await safeEdit(ctx, text, markup);
+  });
+
+  // Strong filter (score / relevance / priority gates)
+  bot.action("cp:filter", async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    await safeEdit(ctx, await filterText(), await filterMarkup());
+  });
+  bot.action(/^cp:setminscore:([0-9.]+)$/, async (ctx) => {
+    await applySettings({ minScore: Number(ctx.match[1]) });
+    await ctx.answerCbQuery("Min score updated ✓").catch(() => {});
+    await safeEdit(ctx, await filterText(), await filterMarkup());
+  });
+  bot.action(/^cp:setminrel:([0-9.]+)$/, async (ctx) => {
+    await applySettings({ minRelevance: Number(ctx.match[1]) });
+    await ctx.answerCbQuery("Min relevance updated ✓").catch(() => {});
+    await safeEdit(ctx, await filterText(), await filterMarkup());
+  });
+  bot.action(/^cp:setminprio:(LOW|NORMAL|HIGH|BREAKING)$/, async (ctx) => {
+    await applySettings({ minPriority: ctx.match[1] });
+    await ctx.answerCbQuery("Min priority updated ✓").catch(() => {});
+    await safeEdit(ctx, await filterText(), await filterMarkup());
   });
 
   // Model
@@ -359,6 +387,39 @@ async function topicsMarkup() {
   rows.push([Markup.button.callback("➕ Add topic", "cp:prompttopic")]);
   rows.push(backRow());
   return Markup.inlineKeyboard(rows);
+}
+
+async function filterText(): Promise<string> {
+  const c = await getRuntimeConfig();
+  const list = (a: string[]) => (a.length ? escapeHtml(a.join(", ")) : "—");
+  return [
+    `🎯 <b>Strong filter</b>`,
+    `Only stories clearing these bars get drafted.`,
+    ``,
+    `Min score: <b>${c.minScore}</b>`,
+    `Min relevance: <b>${c.minRelevance}</b>`,
+    `Min priority: <b>${c.minPriority}</b>`,
+    ``,
+    `Source allow: <code>${list(c.sourceAllowlist)}</code>`,
+    `Source block: <code>${list(c.sourceBlocklist)}</code>`,
+    `Keyword allow: <code>${list(c.keywordAllowlist)}</code>`,
+    `Keyword block: <code>${list(c.keywordBlocklist)}</code>`,
+    ``,
+    `<i>Lists are edited via the dashboard API (PUT /settings).</i>`,
+  ].join("\n");
+}
+async function filterMarkup() {
+  const c = await getRuntimeConfig();
+  const scoreRow = SCORE_PRESETS.map((n) =>
+    Markup.button.callback(`${n === c.minScore ? "✅ " : ""}≥${n}`, `cp:setminscore:${n}`),
+  );
+  const relRow = RELEVANCE_PRESETS.map((n) =>
+    Markup.button.callback(`${n === c.minRelevance ? "✅ " : ""}rel ${n}`, `cp:setminrel:${n}`),
+  );
+  const prioRow = PRIORITY_CHOICES.map((p) =>
+    Markup.button.callback(`${p === c.minPriority ? "✅ " : ""}${p}`, `cp:setminprio:${p}`),
+  );
+  return Markup.inlineKeyboard([scoreRow, relRow, prioRow, backRow()]);
 }
 
 async function statusText(): Promise<string> {

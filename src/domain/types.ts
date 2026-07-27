@@ -12,6 +12,9 @@ export type AspectRatio = "1:1" | "9:16" | "16:9" | "4:5";
 
 export type MediaType = "IMAGE" | "VIDEO";
 
+/** Editorial priority level assigned to a news item by the ranking stage. */
+export type NewsPriority = "BREAKING" | "HIGH" | "NORMAL" | "LOW";
+
 /** A raw news candidate produced by the research stage (pre-persistence). */
 export interface ResearchedNews {
   title: string;
@@ -27,7 +30,7 @@ export interface ResearchedNews {
 export interface RankVerdict {
   score: number; // 0..1 overall priority
   relevance: number; // 0..1 topical relevance
-  keep: boolean;
+  priority: NewsPriority; // editorial level derived in the same call
   reasons: string;
 }
 

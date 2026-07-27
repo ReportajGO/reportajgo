@@ -1,9 +1,13 @@
 import { z } from "zod";
 import { prisma } from "../db/client.js";
+import type { NewsPriority } from "../domain/types.js";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
 
 const log = logger.child({ module: "settings" });
+
+// Priority levels as a tuple literal for z.enum (mirrors PRIORITY_LEVELS).
+const MIN_PRIORITY_VALUES = ["LOW", "NORMAL", "HIGH", "BREAKING"] as const;
 
 // The platforms the system understands. Mirrors the Platform enum / env list.
 export const VALID_PLATFORMS = [
@@ -31,6 +35,22 @@ export interface RuntimeConfig {
    * works). Persisted so a restart doesn't silently resume research.
    */
   researchPaused: boolean;
+
+  // ── Strong filter (applied in the ranking stage) ──
+  /** Minimum editorial score (0..1) to be SELECTED for drafting. */
+  minScore: number;
+  /** Minimum topical relevance (0..1). */
+  minRelevance: number;
+  /** Lowest priority level that still gets drafted. */
+  minPriority: NewsPriority;
+  /** Only allow these sources through (empty = allow all). */
+  sourceAllowlist: string[];
+  /** Drop items from these sources. */
+  sourceBlocklist: string[];
+  /** Require at least one of these keywords in title/summary (empty = no requirement). */
+  keywordAllowlist: string[];
+  /** Drop items containing any of these keywords. */
+  keywordBlocklist: string[];
 }
 
 // One DB row holds the whole override blob as JSON under this key.
@@ -52,6 +72,14 @@ const updateSchema = z
     maxItemsPerRun: z.coerce.number().int().positive().max(50),
     autoPublish: z.boolean(),
     researchPaused: z.boolean(),
+    minScore: z.coerce.number().min(0).max(1),
+    minRelevance: z.coerce.number().min(0).max(1),
+    minPriority: z.enum(MIN_PRIORITY_VALUES),
+    // Allow/block lists may be empty (= no restriction), unlike topics/languages.
+    sourceAllowlist: z.array(z.string().trim().min(1)),
+    sourceBlocklist: z.array(z.string().trim().min(1)),
+    keywordAllowlist: z.array(z.string().trim().min(1)),
+    keywordBlocklist: z.array(z.string().trim().min(1)),
   })
   .partial()
   .strict();
@@ -70,6 +98,13 @@ function envDefaults(): RuntimeConfig {
     maxItemsPerRun: env.MAX_ITEMS_PER_RUN,
     autoPublish: env.AUTO_PUBLISH,
     researchPaused: false,
+    minScore: env.MIN_SCORE,
+    minRelevance: env.MIN_RELEVANCE,
+    minPriority: env.MIN_PRIORITY as NewsPriority,
+    sourceAllowlist: [...env.sourceAllowlist],
+    sourceBlocklist: [...env.sourceBlocklist],
+    keywordAllowlist: [...env.keywordAllowlist],
+    keywordBlocklist: [...env.keywordBlocklist],
   };
 }
 
@@ -135,6 +170,13 @@ function merge(base: RuntimeConfig, over: Partial<RuntimeConfig>): RuntimeConfig
     maxItemsPerRun: over.maxItemsPerRun ?? base.maxItemsPerRun,
     autoPublish: over.autoPublish ?? base.autoPublish,
     researchPaused: over.researchPaused ?? base.researchPaused,
+    minScore: over.minScore ?? base.minScore,
+    minRelevance: over.minRelevance ?? base.minRelevance,
+    minPriority: over.minPriority ?? base.minPriority,
+    sourceAllowlist: over.sourceAllowlist ?? base.sourceAllowlist,
+    sourceBlocklist: over.sourceBlocklist ?? base.sourceBlocklist,
+    keywordAllowlist: over.keywordAllowlist ?? base.keywordAllowlist,
+    keywordBlocklist: over.keywordBlocklist ?? base.keywordBlocklist,
   };
 }
 
@@ -173,6 +215,16 @@ export async function updateRuntimeConfig(
   }
   if (clean.enabledPlatforms) {
     clean.enabledPlatforms = [...new Set(clean.enabledPlatforms)] as PlatformName[];
+  }
+  // Filter lists: trim + dedupe (case preserved); empty is valid (= no restriction).
+  for (const key of [
+    "sourceAllowlist",
+    "sourceBlocklist",
+    "keywordAllowlist",
+    "keywordBlocklist",
+  ] as const) {
+    const list = clean[key];
+    if (list) clean[key] = dedupeUpper(list);
   }
 
   return withConfigLock(async () => {

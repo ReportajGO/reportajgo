@@ -1,20 +1,22 @@
 import { logger } from "../config/logger.js";
+import { coercePriority } from "../domain/priority.js";
 import type { RankVerdict } from "../domain/types.js";
 import { generateJson } from "../research/gemini.js";
 
 const log = logger.child({ module: "rank" });
 
-const MIN_KEEP_SCORE = 0.45;
-
 interface RawVerdict {
   score?: number;
   relevance?: number;
+  priority?: string;
   reasons?: string;
 }
 
 /**
- * Score a news item for posting priority. Combines a Gemini editorial judgment
- * with a hard floor so low-value items are dropped automatically.
+ * Score a news item for posting priority. One Gemini editorial judgment returns
+ * a 0..1 score, a 0..1 topical relevance, and a discrete priority level. The
+ * keep/drop decision (against operator-tunable thresholds) lives in the filter
+ * service so this stays a pure scorer.
  */
 export async function rankNews(item: {
   title: string;
@@ -32,8 +34,16 @@ export async function rankNews(item: {
     `Summary: ${item.summary}`,
     `Source: ${item.sourceName ?? "unknown"}`,
     ``,
-    `Return ONLY JSON: { "score": 0..1, "relevance": 0..1, "reasons": string }`,
+    `Classify PRIORITY as exactly one of:`,
+    `- "BREAKING": major, time-sensitive story of wide importance happening now.`,
+    `- "HIGH": important and clearly newsworthy to a broad audience.`,
+    `- "NORMAL": genuine news but routine; still worth posting.`,
+    `- "LOW": trivial, filler, promotional, or of narrow interest.`,
+    ``,
+    `Return ONLY JSON: { "score": 0..1, "relevance": 0..1, "priority": "BREAKING"|"HIGH"|"NORMAL"|"LOW", "reasons": string }`,
     `score = overall posting priority (newsworthiness x audience interest x credibility).`,
+    `relevance = how well the item fits the topic focus above (0..1).`,
+    `Keep priority consistent with score (higher score => higher priority).`,
   ].join("\n");
 
   try {
@@ -43,12 +53,12 @@ export async function rankNews(item: {
     return {
       score,
       relevance,
-      keep: score >= MIN_KEEP_SCORE,
+      priority: coercePriority(raw.priority, score),
       reasons: raw.reasons ?? "",
     };
   } catch (err) {
-    log.warn({ err, title: item.title }, "ranking failed; defaulting to keep=false");
-    return { score: 0, relevance: 0, keep: false, reasons: "ranking error" };
+    log.warn({ err, title: item.title }, "ranking failed; defaulting to drop");
+    return { score: 0, relevance: 0, priority: "LOW", reasons: "ranking error" };
   }
 }
 

@@ -65,6 +65,7 @@ export class WebsitePublisher implements Publisher {
       source: a.source,
       sourceUrl: a.sourceUrl,
       dedupeKey: a.dedupeKey,
+      ...(a.breaking ? { breaking: true } : {}),
     };
 
     const res = await fetch(this.endpoint, {

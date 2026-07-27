@@ -8,7 +8,8 @@ import { prisma } from "../db/client.js";
 import { approveDraft, rejectDraft } from "../dashboard/approvalService.js";
 import { scanNow } from "../dashboard/controlService.js";
 import { platformsWithoutRequiredMedia, profileFor } from "../domain/platforms.js";
-import type { Platform } from "../domain/types.js";
+import { isNewsPriority } from "../domain/priority.js";
+import type { NewsPriority, Platform } from "../domain/types.js";
 import { MEDIA_ROOT } from "../generate/media/mediaStore.js";
 import {
   getPublishState,
@@ -92,8 +93,16 @@ interface DraftForApproval {
   headline: string | null;
   body: string;
   hashtags: string[];
-  newsItem: { sourceName: string | null; sourceUrl: string } | null;
+  newsItem: { sourceName: string | null; sourceUrl: string; priority?: string | null } | null;
   media: { type: string; url: string }[];
+}
+
+/** A prominent tag for notable stories only (breaking/high); null otherwise. */
+function priorityTag(priority: string | null | undefined): string | null {
+  if (!isNewsPriority(priority)) return null;
+  if (priority === "BREAKING") return "🔴 <b>BREAKING</b>";
+  if (priority === "HIGH") return "🟠 <b>HIGH PRIORITY</b>";
+  return null;
 }
 
 function buildCaption(draft: DraftForApproval): string {
@@ -113,6 +122,7 @@ function buildCaption(draft: DraftForApproval): string {
 interface NewsGroup {
   newsItemId: string;
   headline: string | null;
+  priority: NewsPriority | null; // editorial level, for the badge
   caption: string; // the website copy, used as the single album caption
   media: { type: string; url: string }[]; // every platform's READY media, deduped
   platforms: string[]; // distinct target platforms (for the controls summary)
@@ -124,8 +134,11 @@ function buildGroupCaption(input: {
   body: string;
   hashtags: string[];
   sourceName: string | null;
+  priority?: string | null;
 }): string {
   const lines: string[] = [];
+  const tag = priorityTag(input.priority);
+  if (tag) lines.push(tag, "");
   if (input.headline) lines.push(`📰 <b>${escapeHtml(input.headline)}</b>`, "");
   lines.push(escapeHtml(input.body));
   if (input.hashtags.length)
@@ -178,7 +191,9 @@ async function sendGroupApprovalCard(chatId: number, g: NewsGroup): Promise<void
 
   if (media.length >= 2) {
     await bot.telegram.sendMediaGroup(chatId, albumItems(media, g.caption));
+    const tag = priorityTag(g.priority);
     const summary = [
+      ...(tag ? [tag] : []),
       g.headline ? `📰 <b>${escapeHtml(g.headline)}</b>` : "Review &amp; approve",
       `🖼️ ${media.length} photos · 🌐 ${escapeHtml(g.platforms.join(", "))}`,
     ].join("\n");
@@ -210,7 +225,7 @@ async function sweep(): Promise<void> {
     },
     include: {
       media: { where: { status: "READY" }, select: { type: true, url: true } },
-      newsItem: { select: { sourceName: true, sourceUrl: true } },
+      newsItem: { select: { sourceName: true, sourceUrl: true, priority: true } },
     },
     orderBy: { createdAt: "asc" },
     take: 60,
@@ -244,14 +259,19 @@ async function sweep(): Promise<void> {
       }
     }
 
+    const priority = isNewsPriority(captionDraft.newsItem?.priority)
+      ? captionDraft.newsItem.priority
+      : null;
     const group: NewsGroup = {
       newsItemId,
       headline: captionDraft.headline,
+      priority,
       caption: buildGroupCaption({
         headline: captionDraft.headline,
         body: captionDraft.body,
         hashtags: captionDraft.hashtags,
         sourceName: captionDraft.newsItem?.sourceName ?? null,
+        priority,
       }),
       media,
       platforms: [...new Set(siblings.map((d) => d.platform))],

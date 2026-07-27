@@ -35,6 +35,9 @@ model NewsItem {
   score       Float?
   relevance   Float?
   rankReasons String? @db.Text
+  // Editorial priority level, assigned by the ranker alongside score. Drives
+  // publish ordering (breaking jumps the queue) and the website "breaking" badge.
+  priority NewsPriority?
 
   status NewsStatus @default(NEW)
 
@@ -49,6 +52,13 @@ enum NewsStatus {
   FILTERED_OUT // dropped by ranking
   SELECTED // chosen for content generation
   DRAFTED // drafts created
+}
+
+enum NewsPriority {
+  BREAKING // major, time-sensitive story of wide importance
+  HIGH // clearly newsworthy to a broad audience
+  NORMAL // genuine but routine news
+  LOW // trivial / filler / narrow interest
 }
 
 // ─── Per-platform post draft ────────────────────────────────────────────────

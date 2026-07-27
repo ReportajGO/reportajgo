@@ -3,7 +3,8 @@ import { getRuntimeConfig } from "../../config/settingsStore.js";
 import { logger } from "../../config/logger.js";
 import { prisma } from "../../db/client.js";
 import { profileFor } from "../../domain/platforms.js";
-import type { GeneratedCopy, Platform } from "../../domain/types.js";
+import { priorityRank } from "../../domain/priority.js";
+import type { GeneratedCopy, NewsPriority, Platform } from "../../domain/types.js";
 import { generateJson } from "../../research/gemini.js";
 import { generateCardHeadline } from "./headline.js";
 
@@ -148,10 +149,18 @@ export async function draftNewsItem(newsId: string): Promise<{ drafts: number }>
  */
 export async function draftSelectedItems(): Promise<{ drafts: number }> {
   const { contentLanguages, enabledPlatforms, maxItemsPerRun } = await getRuntimeConfig();
-  // Highest-scored, freshest first — we only draft the top N per run.
-  const allSelected = await prisma.newsItem.findMany({
-    where: { status: "SELECTED" },
-    orderBy: [{ score: "desc" }, { publishedAt: "desc" }],
+  // Highest priority first (breaking jumps the queue), then score, then freshest
+  // — we only draft the top N per run. Enum severity isn't a DB sort order, so
+  // rank in JS after fetching.
+  const allSelected = await prisma.newsItem.findMany({ where: { status: "SELECTED" } });
+  allSelected.sort((a, b) => {
+    const byPriority =
+      priorityRank((b.priority ?? "NORMAL") as NewsPriority) -
+      priorityRank((a.priority ?? "NORMAL") as NewsPriority);
+    if (byPriority !== 0) return byPriority;
+    const byScore = (b.score ?? 0) - (a.score ?? 0);
+    if (byScore !== 0) return byScore;
+    return (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0);
   });
   const selected = allSelected.slice(0, maxItemsPerRun);
   const overflow = allSelected.slice(maxItemsPerRun);

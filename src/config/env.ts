@@ -259,6 +259,22 @@ const schema = z.object({
   // this many hours, keeping the agent DB lean. Published website articles live
   // in the website's own DB and are unaffected.
   NEWS_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
+
+  // ── News priority + strong filter (all live-tunable via the control panel) ──
+  // Minimum editorial score (0..1) a story must reach to be SELECTED for
+  // drafting. Higher = stricter. Defaults above the old 0.45 hard floor.
+  MIN_SCORE: z.coerce.number().min(0).max(1).default(0.6),
+  // Minimum topical relevance (0..1) to the configured topics.
+  MIN_RELEVANCE: z.coerce.number().min(0).max(1).default(0.5),
+  // Lowest priority level that still gets drafted; anything below is dropped.
+  MIN_PRIORITY: z.enum(["LOW", "NORMAL", "HIGH", "BREAKING"]).default("NORMAL"),
+  // Optional source/keyword gates (comma-separated, case-insensitive substring).
+  // An allowlist is only enforced when non-empty. Applied before the LLM call.
+  SOURCE_ALLOWLIST: z.string().default(""),
+  SOURCE_BLOCKLIST: z.string().default(""),
+  KEYWORD_ALLOWLIST: z.string().default(""),
+  KEYWORD_BLOCKLIST: z.string().default(""),
+
   TZ: z.string().default("Asia/Tashkent"),
 });
 
@@ -314,6 +330,10 @@ export const env = {
   contentLanguages: csv(raw.CONTENT_LANGUAGES),
   researchTopics: csv(raw.RESEARCH_TOPICS),
   researchSources: csv(raw.RESEARCH_SOURCES),
+  sourceAllowlist: csv(raw.SOURCE_ALLOWLIST),
+  sourceBlocklist: csv(raw.SOURCE_BLOCKLIST),
+  keywordAllowlist: csv(raw.KEYWORD_ALLOWLIST),
+  keywordBlocklist: csv(raw.KEYWORD_BLOCKLIST),
   approvers: csv(raw.APPROVERS),
   enabledPlatforms,
   // All configured Gemini keys (primary + optional second), de-duped. Calls

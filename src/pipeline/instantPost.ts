@@ -60,6 +60,7 @@ export async function instantPostFromUrl(
           sourceName: news.sourceName ?? null,
           topic: news.topic ?? null,
           language: news.language,
+          priority: "HIGH",
         },
       })
     : await prisma.newsItem.create({
@@ -74,6 +75,7 @@ export async function instantPostFromUrl(
           contentHash: hash,
           score: 1,
           relevance: 1,
+          priority: "HIGH",
           rankReasons: "manual url submission",
           status: "SELECTED",
         },

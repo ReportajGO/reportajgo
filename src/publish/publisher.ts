@@ -25,6 +25,8 @@ export interface PublishArticle {
   sourceUrl?: string;
   /** Stable idempotency key (the news item's content hash). */
   dedupeKey?: string;
+  /** Flag the website article as breaking (lights up the site's badge). */
+  breaking?: boolean;
 }
 
 export interface PublishInput {

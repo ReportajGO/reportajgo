@@ -85,6 +85,7 @@ export async function publishScheduledPost(scheduledPostId: string): Promise<voi
             source: news.sourceName ?? undefined,
             sourceUrl: news.sourceUrl,
             dedupeKey: news.contentHash,
+            breaking: news.priority === "BREAKING",
           }
         : undefined,
     });
