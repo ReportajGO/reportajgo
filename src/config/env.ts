@@ -46,7 +46,10 @@ const schema = z.object({
   //    credit wallet). Run `npm run higgsfield:login` once.
   //  - "higgsfield": Higgsfield REST API (separate API credit wallet).
   //  - "gemini": Gemini image model, stored locally.
-  IMAGE_PROVIDER: z.enum(["gemini", "higgsfield", "higgsfield-mcp"]).default("gemini"),
+  // Defaults to "higgsfield-mcp", NOT "gemini": images must never silently fall
+  // back to Gemini if this var goes missing from the env file. getMediaProvider()
+  // documents "Higgsfield only" and a gemini default quietly contradicted it.
+  IMAGE_PROVIDER: z.enum(["gemini", "higgsfield", "higgsfield-mcp"]).default("higgsfield-mcp"),
   MEDIA_GENERATION_ENABLED: z
     .string()
     .default("true")
