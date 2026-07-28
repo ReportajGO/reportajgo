@@ -179,19 +179,40 @@ async function passPasswordChallenge(page: Page): Promise<boolean> {
 
   log.info("answering Instagram password challenge with the stored password");
   await pw.fill(env.INSTAGRAM_PASSWORD).catch(() => {});
-  const submitted = await clickFirst(
-    page,
-    [
-      'div[role="button"][aria-label*="ontinue"]',
-      'button[type="submit"]',
-      'div[role="button"]:has-text("Continue")',
-      'button:has-text("Log in")',
-      'button:has-text("Log In")',
-    ],
-    3000,
-  );
-  if (!submitted) await page.keyboard.press("Enter").catch(() => {});
-  await page.waitForTimeout(4000);
+
+  // Submit from the field itself. An unscoped "Continue" match hits the
+  // saved-login button *behind* the modal (aria-label="Continue <account>"),
+  // which the overlay blocks — the click throws, and the dialog just sits there
+  // re-prompting. Enter submits the form natively and can't mis-target.
+  await pw.press("Enter").catch(() => {});
+  await page.waitForTimeout(2500);
+
+  // Fallback: the dialog's own submit, scoped INSIDE the dialog so we can never
+  // reach the background button. It renders as a nested <span>, not a <button>.
+  if (await pw.isVisible().catch(() => false)) {
+    const dialog = page.locator('[role="dialog"][aria-label="Profile Password Entry"]').first();
+    const scope = (await dialog.count().catch(() => 0)) > 0 ? dialog : page;
+    await scope
+      .getByText(/^log ?in$/i)
+      .first()
+      .click({ timeout: 3000 })
+      .catch(() => {});
+    await page.waitForTimeout(2500);
+  }
+  await page.waitForTimeout(1500);
+
+  // A rejected password otherwise loops silently until the run dies with a
+  // misleading "could not find the New post button".
+  const rejected = await page
+    .getByText(/incorrect|wasn't right|was not right|try again/i)
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (rejected) {
+    throw new Error(
+      "Instagram rejected the stored INSTAGRAM_PASSWORD — fix it in backend.env and recreate the worker.",
+    );
+  }
 
   const needs2fa = await page
     .getByText(/security code|two-factor|verification code|confirmation code|enter the code|6-digit/i)
@@ -214,8 +235,14 @@ async function clickFirst(page: Page, selectors: string[], timeout = STEP_TIMEOU
     for (const sel of selectors) {
       const loc = page.locator(sel).first();
       if (await loc.isVisible().catch(() => false)) {
-        await loc.click().catch(() => {});
-        return true;
+        // Only report success on a click that actually landed: a visible element
+        // can still be covered by a modal overlay, and swallowing that failure
+        // made callers believe a step succeeded when nothing happened.
+        const clicked = await loc
+          .click()
+          .then(() => true)
+          .catch(() => false);
+        if (clicked) return true;
       }
     }
     await page.waitForTimeout(400);
