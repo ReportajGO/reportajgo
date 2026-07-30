@@ -41,6 +41,11 @@ export default function Logo({
         : { hClass: "h-10 sm:h-[60px]", deskH: 60 };
   const w = Math.round(deskH * 3.31);
 
+  // Cache-bust: the rebrand reused the same filenames, and the logo is served
+  // with `cache-control: max-age=14400`, so returning visitors kept seeing the
+  // old REPORTAJ wordmark for up to 4h. Bump this token whenever the artwork
+  // changes but the filename does not.
+  const v = "reportage";
   const imgClass = `${hClass} w-auto origin-left transition-transform duration-200 group-hover:scale-[1.04]`;
   const common = {
     alt: "RΞPORTAGE GO",
@@ -57,18 +62,18 @@ export default function Logo({
       className="group inline-flex items-center"
     >
       {onDark ? (
-        <Image src="/logo-dark.png" className={imgClass} {...common} />
+        <Image src={`/logo-dark.png?v=${v}`} className={imgClass} {...common} />
       ) : (
         <>
           {/* light-theme view: black normally, white when inverted */}
           <Image
-            src={invert ? "/logo-dark.png" : "/logo.png"}
+            src={invert ? `/logo-dark.png?v=${v}` : `/logo.png?v=${v}`}
             className={`${imgClass} dark:hidden`}
             {...common}
           />
           {/* dark-theme view: white normally, black when inverted */}
           <Image
-            src={invert ? "/logo.png" : "/logo-dark.png"}
+            src={invert ? `/logo.png?v=${v}` : `/logo-dark.png?v=${v}`}
             className={`${imgClass} hidden dark:block`}
             {...common}
           />
