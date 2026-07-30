@@ -18,7 +18,9 @@
 //     knowledge (TZ §4). A story earns its slot on constructive value, never on
 //     how dramatic or fresh it is.
 //   * Content is researched per VERTICAL (7, at fixed shares) and per MARKET
-//     (21, each with its own language and platforms) — not as one global feed.
+//     (21, each with its own audience and platforms) — not as one global feed.
+//     The market picks WHICH stories qualify; it never picks the language the
+//     brief is written in. That is the operator's setting (src/domain/language.ts).
 //   * Evergreen material is explicitly wanted: TZ §21 asks for a bank of 50
 //     evergreen ideas per pilot market. A 24-hour window would exclude most of
 //     the strategy's own content.
@@ -30,6 +32,11 @@
 import { getRuntimeConfig } from "../config/settingsStore.js";
 import { logger } from "../config/logger.js";
 import { prohibitionPromptBlock } from "../domain/editorial.js";
+import {
+  languageName,
+  languageRulePromptBlock,
+  resolvePublicationLanguage,
+} from "../domain/language.js";
 import { marketOf, type Market } from "../domain/markets.js";
 import { uzPriorityPromptBlock } from "../domain/quota.js";
 import type { MarketCode, ResearchedNews, Vertical } from "../domain/types.js";
@@ -61,7 +68,9 @@ const RESPONSE_SHAPE = [
   `  "sourceUrl": string,          // real, primary article or document URL`,
   `  "sourceName": string,         // publisher or institution name`,
   `  "additionalSources": string[],// corroborating URLs, [] if none`,
-  `  "language": string,           // source language code, e.g. "en","ja","ar"`,
+  `  "language": string,           // the SOURCE article's language code — this`,
+  `                                // field reports it, it does NOT change the`,
+  `                                // language you write "title"/"summary" in`,
   `  "publishedAt": string         // ISO 8601 if known, else ""`,
   `}`,
 ].join("\n");
@@ -84,14 +93,16 @@ function sourceRules(): string {
  * Research brief for one vertical aimed at one market.
  *
  * The prompt is built around constructive value rather than newsworthiness, and
- * carries the market's own language/platform/cultural framing so candidates are
- * already fit for that audience instead of being generic wire copy.
+ * carries the market's own platform/cultural framing so candidates are already
+ * fit for that audience instead of being generic wire copy. The brief itself is
+ * always written in the operator's publication language.
  */
 function buildVerticalPrompt(
   vertical: Vertical,
   market: Market,
   hours: number,
   limit: number,
+  language: string,
 ): string {
   const v = verticalOf(vertical);
   return [
@@ -99,12 +110,15 @@ function buildVerticalPrompt(
     `network. You are sourcing material for one specific vertical and one`,
     `specific national audience.`,
     ``,
+    languageRulePromptBlock(language),
+    `- Sources may be in ANY language; only your written output is ${languageName(language)}.`,
+    ``,
     `VERTICAL: ${v.nameEn} (${v.name})`,
     `Subject matter: ${v.scope}.`,
     ``,
     `TARGET MARKET: ${market.nameEn}`,
-    `Audience language: ${market.primaryLanguage}`,
     `Local framing: ${market.localizationNote}`,
+    `The market decides WHICH stories qualify, not what language you write in.`,
     ``,
     `WHAT MAKES A STORY PUBLISHABLE HERE:`,
     `- It centres on a SOLUTION, an OPPORTUNITY, measurable PROGRESS, or genuinely`,
@@ -135,14 +149,22 @@ function buildVerticalPrompt(
  * carries verified, positive, investment-relevant Uzbekistan material to an
  * international audience.
  */
-function buildUzbekistanPrompt(market: Market, vertical: Vertical, limit: number): string {
+function buildUzbekistanPrompt(
+  market: Market,
+  vertical: Vertical,
+  limit: number,
+  language: string,
+): string {
   const v = verticalOf(vertical);
   return [
     `You are the Uzbekistan desk researcher for Reportage GO, an international`,
     `media network. You source verified, positive, evidence-based material about`,
     `UZBEKISTAN for a foreign audience.`,
     ``,
-    `TARGET MARKET: ${market.nameEn} (audience language ${market.primaryLanguage})`,
+    languageRulePromptBlock(language),
+    `- Sources may be in ANY language; only your written output is ${languageName(language)}.`,
+    ``,
+    `TARGET MARKET: ${market.nameEn}`,
     `Local framing: ${market.localizationNote}`,
     `VERTICAL: ${v.nameEn} — ${v.scope}.`,
     ``,
@@ -165,11 +187,14 @@ function buildUzbekistanPrompt(market: Market, vertical: Vertical, limit: number
 }
 
 /** Prompt to read ONE specific article URL and extract its content. */
-function buildUrlPrompt(url: string): string {
+function buildUrlPrompt(url: string, language: string): string {
   return [
     `You are an editor at Reportage GO, an international constructive media`,
     `network. Read the SPECIFIC article at this exact URL and extract its content:`,
     url,
+    ``,
+    languageRulePromptBlock(language),
+    `- The article itself may be in any language; your output is still ${languageName(language)}.`,
     ``,
     `Use Google Search to open and read that exact page. Base EVERYTHING strictly`,
     `on that article's real content — do NOT invent facts, numbers, names or`,
@@ -190,7 +215,8 @@ function buildUrlPrompt(url: string): string {
     `  "sourceUrl": string,`,
     `  "sourceName": string,`,
     `  "additionalSources": string[],`,
-    `  "language": string,`,
+    `  "language": string,             // the SOURCE article's language code; it`,
+    `                                  // does NOT change your output language`,
     `  "topic": string,                // one of: ECONOMY, INNOVATION, SCIENCE, STARTUP, PEOPLE, FACTS, HISTORY`,
     `  "publishedAt": string           // ISO 8601 if known, else ""`,
     `}`,
@@ -202,8 +228,10 @@ function buildUrlPrompt(url: string): string {
  * Used by the operator-driven "send a link → instant post" flow.
  */
 export async function researchUrl(url: string): Promise<ResearchedNews> {
-  log.info({ url }, "researching single url");
-  const { data } = await groundedJson<RawNews | RawNews[]>(buildUrlPrompt(url));
+  const { contentLanguages } = await getRuntimeConfig();
+  const language = resolvePublicationLanguage(contentLanguages);
+  log.info({ url, language }, "researching single url");
+  const { data } = await groundedJson<RawNews | RawNews[]>(buildUrlPrompt(url, language));
   const r = Array.isArray(data) ? data[0] : data;
   if (!r || !r.title?.trim() || !r.summary?.trim()) {
     throw new Error("could not read the article at that link");
@@ -235,14 +263,15 @@ export async function researchVertical(
 ): Promise<ResearchedNews[]> {
   const { vertical, market: marketCode, uzbekistanDesk = false } = opts;
   const market = marketOf(marketCode);
-  const { researchMaxAgeHours } = await getRuntimeConfig();
+  const { researchMaxAgeHours, contentLanguages } = await getRuntimeConfig();
+  const language = resolvePublicationLanguage(contentLanguages);
   const limit = opts.limit ?? 6;
 
-  log.info({ vertical, market: marketCode, uzbekistanDesk }, "researching vertical");
+  log.info({ vertical, market: marketCode, uzbekistanDesk, language }, "researching vertical");
 
   const prompt = uzbekistanDesk
-    ? buildUzbekistanPrompt(market, vertical, limit)
-    : buildVerticalPrompt(vertical, market, researchMaxAgeHours, limit);
+    ? buildUzbekistanPrompt(market, vertical, limit, language)
+    : buildVerticalPrompt(vertical, market, researchMaxAgeHours, limit, language);
 
   const { data, sources } = await groundedJson<RawNews[]>(prompt);
   const items = Array.isArray(data) ? data : [];

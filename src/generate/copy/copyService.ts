@@ -12,11 +12,22 @@
 //
 // The network's core distribution rule (TZ §8) forbids that: "Barcha platformada
 // bir xil post" — the same post everywhere — is explicitly not allowed. One
-// master brief becomes a distinct version per MARKET (its own language and
-// cultural framing) and per PLATFORM (its own length, hook and CTA), written
-// against a production FORMAT (TZ §7).
+// master brief becomes a distinct version per PLATFORM (its own length, hook and
+// CTA), written against a production FORMAT (TZ §7), with the target MARKET
+// supplying the framing and relevance angle.
 //
-// Every draft now also carries a content passport (TZ §7.2): the provenance,
+// LANGUAGE, HOWEVER, IS NOT PER-MARKET. A market's `primaryLanguage` says who
+// the story is for, not what language it is written in. The post language is the
+// operator's selection (`contentLanguages`, dashboard-editable) and nothing else
+// — see src/domain/language.ts. Reading it off the market instead produced
+// Japanese/Korean/Arabic posts on a channel configured for Uzbek only.
+//
+// For the same reason a story is drafted for ONE market, not fanned out across
+// every active one: all versions would now share a language AND a destination
+// (there is a single Telegram channel, Instagram account and website), so the
+// fan-out yielded near-duplicate posts rather than distinct localisations.
+//
+// Every draft also carries a content passport (TZ §7.2): the provenance,
 // compliance and approval record that makes each published item auditable.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -26,7 +37,12 @@ import { logger } from "../../config/logger.js";
 import { prisma } from "../../db/client.js";
 import { principlesPromptBlock, prohibitionPromptBlock, maxTier } from "../../domain/editorial.js";
 import { formatOf, nextFormat, productionPromptBlock } from "../../domain/formats.js";
-import { findMarket, isRtlLanguage, type Market } from "../../domain/markets.js";
+import {
+  languageName,
+  languageRulePromptBlock,
+  resolvePublicationLanguage,
+} from "../../domain/language.js";
+import { findMarket, type Market } from "../../domain/markets.js";
 import { profileFor } from "../../domain/platforms.js";
 import { priorityRank } from "../../domain/priority.js";
 import type {
@@ -100,19 +116,21 @@ function buildPrompt(news: SourceNews, ctx: CopyContext): string {
     `Write a ${f.name} post for ${ctx.platform}, for Reportage GO — an`,
     `international constructive media network.`,
     ``,
+    languageRulePromptBlock(ctx.language),
+    ``,
     ctx.market ? `TARGET MARKET: ${ctx.market.nameEn}` : `TARGET MARKET: unspecified`,
-    `Language: write the body in "${ctx.language}"${
-      ctx.market ? ` for a ${ctx.market.nameEn} audience` : ""
-    }.`,
     ctx.market ? `Local framing: ${ctx.market.localizationNote}` : null,
-    isRtlLanguage(ctx.language)
-      ? `This language is right-to-left: use correct RTL punctuation and local typography.`
+    ctx.market
+      ? `The market sets the ANGLE — which facts matter to this audience and why.`
+      : null,
+    ctx.market
+      ? `It does NOT set the language: still write in ${languageName(ctx.language)}, as above.`
       : null,
     ``,
-    `LOCALISATION RULE (non-negotiable): this is TRANSCREATION, not translation.`,
-    `Re-express the story the way a native editor in this market would write it —`,
-    `local idiom, local examples, local number/date/currency conventions. Never`,
-    `produce a word-for-word rendering of the source text.`,
+    `EDITORIAL RULE (non-negotiable): this is TRANSCREATION, not translation.`,
+    `Re-express the story the way a native ${languageName(ctx.language)} editor would`,
+    `write it — natural idiom, familiar examples, local number/date/currency`,
+    `conventions. Never produce a word-for-word rendering of the source text.`,
     ``,
     productionPromptBlock(ctx.format),
     wordLine,
@@ -243,15 +261,17 @@ function buildPassport(
 /**
  * Create PENDING_MEDIA drafts for ONE news item, one per (market × platform).
  *
- * Each market gets its own language and framing; each platform within that
- * market gets its own length, hook and CTA. A single shared card headline per
- * market keeps the visual identity consistent across that market's platforms.
+ * Every draft is written in `language` — the operator's selected publication
+ * language — regardless of which market it targets. The market supplies framing
+ * only; each platform gets its own length, hook and CTA. A single shared card
+ * headline per market keeps the visual identity consistent across its platforms.
  */
 async function createDraftsForItem(
   news: SourceNews,
   markets: MarketCode[],
   platforms: string[],
   format: ContentFormat,
+  language: string,
 ): Promise<{ created: number; planned: number; missing: string[] }> {
   let created = 0;
   const missing: string[] = [];
@@ -276,9 +296,6 @@ async function createDraftsForItem(
   const tier = resolveApprovalTier(news, partnership);
 
   for (const marketCode of markets) {
-    const market = findMarket(marketCode);
-    const language = market?.primaryLanguage ?? "en";
-
     // Skip the whole market when every one of its platform versions already
     // exists, so we don't pay for a headline we won't use.
     const pendingPlatforms = targetPlatforms.filter(
@@ -351,20 +368,24 @@ async function createDraftsForItem(
 }
 
 /**
- * Which markets a given item is published to.
+ * Which market a given item is drafted for — exactly one.
  *
- * An item researched FOR a specific market goes to that market only — it was
- * sourced for that audience. Uzbekistan-quota material goes to every active
- * market, since the whole point of the 20% is to carry it to all audiences
- * (TZ §5.2).
+ * An item researched FOR a specific market keeps that market; anything else
+ * (an operator-supplied link, a market since deactivated) falls back to the
+ * first active one.
+ *
+ * Uzbekistan-quota material used to fan out to every active market, on the
+ * reasoning that the point of the 20% is to reach all audiences (TZ §5.2). That
+ * only holds while each market is a distinct localisation with its own channel.
+ * Here every version would be written in the same operator-selected language and
+ * pushed to the same Telegram channel, Instagram account and website — so the
+ * fan-out published the same story N times instead of reaching N audiences. The
+ * quota is still honoured; it is carried by one version rather than six.
  */
-function marketsForItem(news: SourceNews, activeMarkets: MarketCode[]): MarketCode[] {
-  if (news.uzbekistanQuota) return activeMarkets;
+function marketForItem(news: SourceNews, activeMarkets: MarketCode[]): MarketCode[] {
   if (news.market && activeMarkets.includes(news.market as MarketCode)) {
     return [news.market as MarketCode];
   }
-  // No market recorded (e.g. an operator-supplied link): fall back to the first
-  // active market rather than fanning out to all 21 unintentionally.
   return activeMarkets.slice(0, 1);
 }
 
@@ -379,13 +400,15 @@ export async function draftNewsItem(newsId: string): Promise<{ drafts: number }>
 
   const state = await getEditorialStateSafe();
   const format = nextFormat(state.formatCounts, cfg.availableFormats);
-  const markets = marketsForItem(news as SourceNews, cfg.activeMarkets);
+  const markets = marketForItem(news as SourceNews, cfg.activeMarkets);
+  const language = resolvePublicationLanguage(cfg.contentLanguages);
 
   const { created, planned, missing } = await createDraftsForItem(
     news as SourceNews,
     markets,
     cfg.enabledPlatforms,
     format,
+    language,
   );
   if (created > 0) {
     await prisma.newsItem.update({ where: { id: newsId }, data: { status: "DRAFTED" } });
@@ -396,7 +419,7 @@ export async function draftNewsItem(newsId: string): Promise<{ drafts: number }>
       "incomplete market/platform coverage; re-drafting this item will fill only the missing versions",
     );
   }
-  log.info({ newsId, drafts: created, markets, format }, "single item drafted");
+  log.info({ newsId, drafts: created, markets, language, format }, "single item drafted");
   return { drafts: created };
 }
 
@@ -444,18 +467,20 @@ export async function draftSelectedItems(): Promise<{ drafts: number }> {
   // Track format usage across this run so the batch itself stays on the target
   // mix, instead of every item in the run picking the same under-served format.
   const runFormatCounts = { ...state.formatCounts };
+  const language = resolvePublicationLanguage(cfg.contentLanguages);
   let drafts = 0;
   let incomplete = 0;
 
   for (const news of selected) {
     const format = nextFormat(runFormatCounts, cfg.availableFormats);
-    const markets = marketsForItem(news as SourceNews, cfg.activeMarkets);
+    const markets = marketForItem(news as SourceNews, cfg.activeMarkets);
 
     const { created, planned, missing } = await createDraftsForItem(
       news as SourceNews,
       markets,
       cfg.enabledPlatforms,
       format,
+      language,
     );
     drafts += created;
 
@@ -483,6 +508,6 @@ export async function draftSelectedItems(): Promise<{ drafts: number }> {
     }
   }
 
-  log.info({ drafts, incomplete, quota: state.quota.verdict }, "drafting complete");
+  log.info({ drafts, incomplete, language, quota: state.quota.verdict }, "drafting complete");
   return { drafts };
 }

@@ -12,6 +12,8 @@
 // information architecture should not drift when someone edits a filter.
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
+import { getRuntimeConfig } from "../config/settingsStore.js";
+import { resolvePublicationLanguage } from "../domain/language.js";
 import { themeSlug } from "../domain/themes.js";
 import { VERTICALS } from "../domain/verticals.js";
 
@@ -55,9 +57,12 @@ export async function syncThemesToWebsite(
     log.warn("WEBSITE_API_KEY not set; skipping theme sync");
     return;
   }
-  // Labels are supplied in the agent's primary content language; the website
-  // translates them into every site locale.
-  const lang = (env.contentLanguages[0] ?? "en").toLowerCase();
+  // Labels are supplied in the agent's publication language; the website
+  // translates them into every site locale. Read it through the runtime config
+  // so a language change made in the dashboard reaches the site too, rather than
+  // pinning to whatever the container booted with.
+  const { contentLanguages } = await getRuntimeConfig();
+  const lang = resolvePublicationLanguage(contentLanguages).toLowerCase();
   const themes = entries
     .map((entry) =>
       typeof entry === "string"

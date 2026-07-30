@@ -11,31 +11,14 @@
 //
 // So the Uzbek style guide is retained as ONE language profile among several,
 // and the market's own framing note is injected alongside it.
+//
+// The caller decides which profile applies, and it always passes the operator's
+// selected publication language (src/domain/language.ts) — never the market's
+// own primaryLanguage. The market note here shapes the angle, not the language.
 
+import { languageName, languageRulePromptBlock } from "../../domain/language.js";
 import { findMarket } from "../../domain/markets.js";
 import { generateText } from "../../research/gemini.js";
-
-const LANGUAGE_NAMES: Record<string, string> = {
-  uz: "Uzbek",
-  ru: "Russian",
-  en: "English",
-  ja: "Japanese",
-  ko: "Korean",
-  ms: "Malay",
-  "zh-hans": "Simplified Chinese",
-  "zh-hant": "Traditional Chinese",
-  tr: "Turkish",
-  de: "German",
-  fr: "French",
-  sv: "Swedish",
-  ar: "Arabic",
-  es: "Spanish",
-  "pt-br": "Brazilian Portuguese",
-};
-
-function languageName(language: string): string {
-  return LANGUAGE_NAMES[language.toLowerCase()] ?? language;
-}
 
 /**
  * Language-specific headline craft notes. Only languages with a genuinely
@@ -93,11 +76,10 @@ export interface HeadlineOptions {
 }
 
 /**
- * Generate a professional headline in the target market's language — the same
- * text used on the card image, the dashboard, the published title and the
- * caption.
+ * Generate a professional headline in the publication language — the same text
+ * used on the card image, the dashboard, the published title and the caption.
  *
- * The headline is written for the local audience by a native-editor persona, and
+ * The headline is written by a native-editor persona in `options.language`, and
  * is constrained by the network's standing rules: no clickbait, no alarm, no
  * sensationalism (TZ §6, §12).
  */
@@ -117,10 +99,13 @@ export async function generateCardHeadline(
   const prompt = [
     `You are a senior native editor at Reportage GO, an international constructive`,
     `media network. Write ONE professional headline in ${langName} for the story below.`,
-    market ? `` : null,
-    market ? `TARGET AUDIENCE: ${market.nameEn}` : null,
-    market ? `Local framing: ${market.localizationNote}` : null,
     ``,
+    languageRulePromptBlock(opts.language),
+    ``,
+    market ? `TARGET AUDIENCE: ${market.nameEn}` : null,
+    market ? `Local framing: ${market.localizationNote} (this shapes the ANGLE only —` : null,
+    market ? `the headline is still written in ${langName}).` : null,
+    market ? `` : null,
     `WRITE LIKE A NATIVE EDITOR — not a translation:`,
     `- Natural, fluent ${langName}. Re-phrase the story idiomatically for this`,
     `  audience; never translate the source title word-for-word.`,

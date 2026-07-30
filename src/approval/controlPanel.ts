@@ -6,6 +6,7 @@ import {
   updateRuntimeConfig,
   VALID_PLATFORMS,
 } from "../config/settingsStore.js";
+import { languageName, resolvePublicationLanguage } from "../domain/language.js";
 import { MARKETS } from "../domain/markets.js";
 import { describe as describeQuota } from "../domain/quota.js";
 import type { MarketCode, NewsPriority } from "../domain/types.js";
@@ -77,6 +78,7 @@ export async function mainMenu(): Promise<{ text: string; markup: ReturnType<typ
     `🌍 <b>ReportageGO — Global Media Network</b>\n\n` +
     `Auto-research: <b>${active ? `ON · ${cfg.researchCron}` : "PAUSED"}</b>\n` +
     `Auto-publish: <b>${cfg.autoPublish ? "ON — tier A only, B/C held for review" : "OFF — approve first"}</b>\n` +
+    `Post language: <b>${languageName(resolvePublicationLanguage(cfg.contentLanguages))}</b>\n` +
     `Markets: <b>${cfg.activeMarkets.length}</b> (${cfg.activeMarkets.slice(0, 6).join(", ")}${cfg.activeMarkets.length > 6 ? "…" : ""})\n` +
     `${quotaIcon} UZ quota: <b>${q.share}%</b> of ${q.totalCount} (target 18–22%)\n` +
     `Limit: <b>${cfg.maxItemsPerRun}/run</b> · Verticals: <b>${cfg.verticalsPerRun}/run</b>\n` +
@@ -102,7 +104,9 @@ async function marketsScreen(): Promise<{ text: string; markup: ReturnType<typeo
   const active = new Set(cfg.activeMarkets);
   const text =
     `🌍 <b>Markets</b> — ${active.size} of ${MARKETS.length} active\n\n` +
-    `Each market publishes in its own language on its own platforms.\n` +
+    `A market decides which stories get researched and how they are framed.\n` +
+    `It does NOT change the post language — every post is written in\n` +
+    `<b>${languageName(resolvePublicationLanguage(cfg.contentLanguages))}</b>, set by "Content languages" in the dashboard.\n\n` +
     `Tap to toggle.`;
 
   // Four per row keeps the 21 codes readable on a phone.

@@ -15,6 +15,10 @@
 
 import type { MarketCode, Region, RolloutPhase, CadenceTier } from "./types.js";
 
+// NOTE: `primaryLanguage` below is the language a market's AUDIENCE reads. It is
+// deliberately NOT the language posts are written in — that is the operator's
+// `contentLanguages` setting, resolved in ./language.ts. See the header there.
+
 export interface Market {
   code: MarketCode;
   /** Market name as used in the concept document (Uzbek). */
@@ -388,10 +392,8 @@ export function allPublicationLanguages(): string[] {
   return [...langs];
 }
 
-/**
- * Whether this market's Arabic/Hebrew-style right-to-left layout applies to the
- * given language. Drives card rendering and subtitle alignment (TZ §11, §12).
- */
-export function isRtlLanguage(language: string): boolean {
-  return /^(ar|he|fa|ur)\b/i.test(language);
-}
+// Re-exported for the callers that reach for it alongside a market lookup. The
+// implementation lives in ./language.ts, which owns every language concern —
+// including the rule that a market's primaryLanguage never decides what language
+// a post is written in.
+export { isRtlLanguage } from "./language.js";
