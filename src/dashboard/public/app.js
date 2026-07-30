@@ -1,4 +1,4 @@
-// ReportajGO control panel — talks to the /api JSON endpoints.
+// ReportageGO control panel — talks to the /api JSON endpoints.
 const PLATFORMS = ["TELEGRAM", "INSTAGRAM", "WEBSITE", "YOUTUBE"];
 const LANGUAGES = [
   { code: "en", label: "English" },

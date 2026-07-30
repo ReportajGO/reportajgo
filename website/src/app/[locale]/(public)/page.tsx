@@ -24,7 +24,7 @@ export async function generateMetadata({
   const title = t("home.title");
   const description = t("home.description");
   return {
-    title: { absolute: title }, // already brand-complete; skip the "— ReportajGO" template
+    title: { absolute: title }, // already brand-complete; skip the "— ReportageGO" template
     description,
     alternates: buildAlternates(locale, ""),
     openGraph: { title, description, url: `/${locale}` },
@@ -49,7 +49,7 @@ export default async function HomePage({
   if (posts.length === 0) {
     return (
       <div className="py-24 text-center font-display">
-        <b className="mb-2 block text-2xl text-ink">ReportajGO</b>
+        <b className="mb-2 block text-2xl text-ink">ReportageGO</b>
         <p className="text-ink-soft">No posts in this language yet.</p>
       </div>
     );

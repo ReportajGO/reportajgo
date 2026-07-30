@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ===========================================================
-   ReportajGO — theme tokens
+   ReportageGO — theme tokens
    Light = brand-white bg / brand-black text
    Dark  = deep matte brand-black bg / brand-white text
    Values are "R G B" triplets so Tailwind's <alpha-value> works.

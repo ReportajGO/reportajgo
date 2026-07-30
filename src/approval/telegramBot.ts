@@ -406,7 +406,7 @@ export function startApprovalBot(): { stop: () => void } | undefined {
     // Reaching here means the caller already passed the allow-list gate.
     await addApproverChat(ctx.chat.id);
     await ctx.reply(
-      "✅ You're registered as a ReportajGO approver.\n" +
+      "✅ You're registered as a ReportageGO approver.\n" +
         "• I'll send each auto-researched post here with Approve / Reject buttons.\n" +
         "• Or just paste a news link and I'll build ready posts + images and publish them immediately — no approval needed.",
     );

@@ -1,17 +1,17 @@
 {
   "seo": {
-    "siteName": "ReportajGO",
+    "siteName": "ReportageGO",
     "home": {
-      "title": "ReportajGO — World news in Uzbek, Russian & English",
+      "title": "ReportageGO — World news in Uzbek, Russian & English",
       "description": "Breaking world news without the noise — fast, clear coverage in three languages (UZ/RU/EN)."
     },
     "category": {
-      "description": "The latest {name} news on ReportajGO — fast, clear coverage in three languages."
+      "description": "The latest {name} news on ReportageGO — fast, clear coverage in three languages."
     },
     "search": {
       "title": "Search"
     },
-    "ogAlt": "ReportajGO — World News"
+    "ogAlt": "ReportageGO — World News"
   },
   "brand": {
     "slogan": "News is here"

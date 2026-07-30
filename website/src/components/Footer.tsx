@@ -44,7 +44,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-9 flex flex-wrap justify-between gap-3 border-t border-white/15 pt-4 font-mono text-xs opacity-60">
-          <span>© 2026 ReportajGO · {t("footer.rights")}</span>
+          <span>© 2026 ReportageGO · {t("footer.rights")}</span>
         </div>
       </div>
     </footer>

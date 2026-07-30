@@ -36,7 +36,7 @@ interface IngestResponse {
 }
 
 /**
- * Publishes an approved draft to the ReportajGO website via its agent ingest
+ * Publishes an approved draft to the ReportageGO website via its agent ingest
  * API (POST /api/agent/posts). The post is already human-approved (Telegram),
  * so the site publishes it live immediately.
  */

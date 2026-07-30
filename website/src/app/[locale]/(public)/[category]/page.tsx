@@ -25,7 +25,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: "seo" });
   const description = t("category.description", { name: theme.name });
   return {
-    title: theme.name, // "-> {name} — ReportajGO" via the layout template
+    title: theme.name, // "-> {name} — ReportageGO" via the layout template
     description,
     alternates: buildAlternates(locale, `/${category}`),
     openGraph: { title: theme.name, description, url: `/${locale}/${category}` },

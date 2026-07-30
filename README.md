@@ -1,4 +1,4 @@
-# ReportajGO Agent
+# ReportageGO Agent
 
 An AI agent that researches regional news, filters & ranks it, generates
 per-platform posts **and** AI media (images/videos), queues everything for

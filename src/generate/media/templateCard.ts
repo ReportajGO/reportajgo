@@ -1,7 +1,7 @@
-// Code reproduction of the ReportajGO Canva post template (1080×1080 square):
+// Code reproduction of the ReportageGO Canva post template (1080×1080 square):
 //   • full-bleed background photo
 //   • floating white card (bottom) with a thick red rounded border
-//   • black "REPORTAJGO" pill badge centered on the card's top edge
+//   • black "REPORTAGE GO" pill badge centered on the card's top edge
 //   • black, bold, justified headline inside the card
 //   • short tan underline accent, left-aligned
 //
@@ -38,7 +38,7 @@ const UNDERLINE_COLOR = "#9C8A5E";
 const WHITE = "#FFFFFF";
 
 const BRAND_ROOT = isAbsolute(env.BRAND_DIR) ? env.BRAND_DIR : resolve(process.cwd(), env.BRAND_DIR);
-// Full REPORTAJGO wordmark (used as-is in the badge when present).
+// Full REPORTAGE GO wordmark (used as-is in the badge when present).
 const WORDMARK_PATH = join(BRAND_ROOT, "logo-wordmark.png");
 
 // ── fonts ─────────────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ function findLogo(): string | undefined {
 
 // ── badge ─────────────────────────────────────────────────────────────────────
 async function drawBadge(ctx: SKRSContext2D, cx: number, cy: number) {
-  // Preferred: the real REPORTAJGO wordmark, used as-is on a white red-bordered
+  // Preferred: the real REPORTAGE GO wordmark, used as-is on a white red-bordered
   // pill (so the dark logo stays legible where the badge overlaps the photo).
   if (existsSync(WORDMARK_PATH)) {
     try {
@@ -179,7 +179,7 @@ async function drawBadge(ctx: SKRSContext2D, cx: number, cy: number) {
   }
 
   const family = ensureFont();
-  const text = "REPORTAJ";
+  const text = "REPORTAGE";
   const fontPx = 38;
   ctx.font = `italic 800 ${fontPx}px ${family}`;
   const textW = ctx.measureText(text).width;

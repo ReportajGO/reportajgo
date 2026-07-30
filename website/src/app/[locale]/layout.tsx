@@ -32,8 +32,8 @@ const spaceMono = Space_Mono({
 // so canonical/OpenGraph URLs resolve absolute for search engines. These are
 // site-wide DEFAULTS; per-page generateMetadata overrides title/description/
 // canonical/hreflang where set.
-const SITE_NAME = "ReportajGO";
-const DEFAULT_TITLE = "ReportajGO — World News";
+const SITE_NAME = "ReportageGO";
+const DEFAULT_TITLE = "ReportageGO — World News";
 const DEFAULT_DESCRIPTION =
   "World news without the noise. Fast, clear, in three languages (UZ/RU/EN).";
 const DEFAULT_OG_IMAGE = {
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: DEFAULT_TITLE,
-    template: "%s — ReportajGO",
+    template: "%s — ReportageGO",
   },
   description: DEFAULT_DESCRIPTION,
   applicationName: SITE_NAME,

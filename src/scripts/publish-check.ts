@@ -102,7 +102,7 @@ async function main(): Promise<void> {
   }
 
   const image = await resolveImage(arg("image"), mediaDir);
-  const caption = arg("caption") || "ReportajGO — test post";
+  const caption = arg("caption") || "ReportageGO — test post";
   const wantTelegram = !has("instagram-only");
   const wantInstagram = !has("telegram-only");
 

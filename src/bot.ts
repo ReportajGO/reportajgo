@@ -8,7 +8,7 @@ import { initSettings } from "./config/settingsStore.js";
 import { prisma } from "./db/client.js";
 
 async function bootstrap() {
-  logger.info("ReportajGO Telegram bot starting");
+  logger.info("ReportageGO Telegram bot starting");
   await initSettings();
   const bot = startApprovalBot();
   if (!bot) {

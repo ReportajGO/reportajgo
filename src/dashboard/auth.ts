@@ -5,7 +5,7 @@ import { logger } from "../config/logger.js";
 
 const log = logger.child({ module: "dashboard:auth" });
 
-const REALM = "ReportajGO Control Panel";
+const REALM = "ReportageGO Control Panel";
 
 /** Constant-time string compare that tolerates length differences. */
 function safeEqual(a: string, b: string): boolean {

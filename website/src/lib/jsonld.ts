@@ -6,7 +6,7 @@ import type { PostDTO } from "./posts";
 import { SITE_URL, absoluteUrl } from "./seo";
 import { SOCIALS } from "@/components/SocialLinks";
 
-const SITE_NAME = "ReportajGO";
+const SITE_NAME = "ReportageGO";
 const LOGO_URL = absoluteUrl("/icon.png");
 const DEFAULT_OG = absoluteUrl("/og-default.png");
 // Google truncates news headlines beyond ~110 characters.

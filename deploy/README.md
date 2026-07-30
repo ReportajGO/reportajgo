@@ -1,4 +1,4 @@
-# ReportajGO Hetzner Deployment
+# ReportageGO Hetzner Deployment
 
 This v1 deployment is intentionally one monorepo, one pipeline, one Compose
 stack.

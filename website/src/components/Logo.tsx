@@ -2,11 +2,11 @@ import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 
 /**
- * RΞPORTAJ GO brand lockup, rendered from the logo image.
+ * RΞPORTAGE GO brand lockup, rendered from the logo image.
  *
  * Two artworks share the same red accents; only the wordmark color differs:
- * - /logo.png       → black "RΞPORTAJ" (for light surfaces)
- * - /logo-dark.png  → white "RΞPORTAJ" (for dark surfaces)
+ * - /logo.png       → black "RΞPORTAGE" (for light surfaces)
+ * - /logo-dark.png  → white "RΞPORTAGE" (for dark surfaces)
  *
  * Color selection:
  * - default → follows the page theme (black in light, white in dark), for
@@ -43,7 +43,7 @@ export default function Logo({
 
   const imgClass = `${hClass} w-auto origin-left transition-transform duration-200 group-hover:scale-[1.04]`;
   const common = {
-    alt: "RΞPORTAJ GO",
+    alt: "RΞPORTAGE GO",
     width: w,
     height: deskH,
     priority: true,
@@ -53,7 +53,7 @@ export default function Logo({
   return (
     <Link
       href={href}
-      aria-label="RΞPORTAJ GO"
+      aria-label="RΞPORTAGE GO"
       className="group inline-flex items-center"
     >
       {onDark ? (

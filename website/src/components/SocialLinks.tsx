@@ -1,4 +1,4 @@
-/** Official ReportajGO social profiles. */
+/** Official ReportageGO social profiles. */
 export const SOCIALS = [
   {
     name: "Telegram",

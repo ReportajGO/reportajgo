@@ -59,7 +59,7 @@ async function ensureClientId(store: TokenStore): Promise<string> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      client_name: "ReportajGO Agent",
+      client_name: "ReportageGO Agent",
       redirect_uris: [REDIRECT_URI],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
@@ -92,7 +92,7 @@ function waitForCode(expectedState: string): Promise<string> {
         `<html><body style="font-family:sans-serif;text-align:center;padding-top:60px">` +
           (error || !code
             ? `<h2>Authorization failed</h2><p>${error ?? "no code returned"}</p>`
-            : `<h2>✓ ReportajGO connected to Higgsfield</h2><p>You can close this tab.</p>`) +
+            : `<h2>✓ ReportageGO connected to Higgsfield</h2><p>You can close this tab.</p>`) +
           `</body></html>`,
       );
       server.close();

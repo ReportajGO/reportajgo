@@ -2,7 +2,7 @@
  * SCRIPT 2 — the "Canva" branded-card step.
  *
  * Takes a background photo (local path OR https URL) + a headline and composites
- * the branded ReportajGO card — the same card the Canva template produces, drawn
+ * the branded ReportageGO card — the same card the Canva template produces, drawn
  * in code by templateCard.ts (CARD_RENDERER=template). The real-browser Canva
  * renderer is brittle/broken, so this code reproduction is the working path.
  *

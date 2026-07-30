@@ -1,6 +1,6 @@
 // Telegram Mini App wiring.
 //
-// Exposes the local ReportajGO website (WEBSITE_API_URL) over a public HTTPS
+// Exposes the local ReportageGO website (WEBSITE_API_URL) over a public HTTPS
 // cloudflared "quick tunnel", then points the approval bot's menu button — the
 // "app" you open from inside the bot — at the website admin page.
 //

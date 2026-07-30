@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 // Served at /manifest.webmanifest. Minimal PWA metadata + install icons.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "ReportajGO — World News",
-    short_name: "ReportajGO",
+    name: "ReportageGO — World News",
+    short_name: "ReportageGO",
     description:
       "World news without the noise. Fast, clear, in three languages (UZ/RU/EN).",
     start_url: "/",

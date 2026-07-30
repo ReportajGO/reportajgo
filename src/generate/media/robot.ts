@@ -51,7 +51,7 @@ export async function generateNewsPhoto(prompt: string, ratio: AspectRatio): Pro
 }
 
 /**
- * Composite a background photo into the branded ReportajGO card. Honors
+ * Composite a background photo into the branded ReportageGO card. Honors
  * CARD_RENDERER: "template" (the working code reproduction of the Canva card) or
  * "builtin". The real-browser "canva" renderer is intentionally NOT used here —
  * it is brittle/broken; the template card is its pixel-matched replacement.

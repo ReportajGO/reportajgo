@@ -12,7 +12,7 @@ import { CANVA_DEBUG_DIR } from "./config.js";
 import { renderWithCanva } from "./render.js";
 
 async function main(): Promise<void> {
-  const headline = process.argv[2] || "BREAKING: ReportajGO test headline";
+  const headline = process.argv[2] || "BREAKING: ReportageGO test headline";
   const imagePath = resolve(process.argv[3] || "brand/reference.png");
 
   console.log("Rendering via Canva…");

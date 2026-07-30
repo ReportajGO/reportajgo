@@ -1,5 +1,5 @@
 /**
- * Machine-to-machine auth for the ReportajGO AI agent.
+ * Machine-to-machine auth for the ReportageGO AI agent.
  *
  * The agent is not a browser, so it authenticates with a static bearer token
  * (AGENT_API_KEY) instead of a NextAuth session. Keep this key secret — anyone

@@ -158,7 +158,7 @@ export default async function ArticlePage({
           className={`mb-3 ${coverClass}`}
         />
         <p className="mb-6 font-mono text-xs text-ink-soft">
-          ReportajGO · {wordFor(post.category)}
+          ReportageGO · {wordFor(post.category)}
         </p>
 
         <div className="mb-6 flex items-center gap-3 border-y border-line py-3.5">
@@ -167,10 +167,10 @@ export default async function ArticlePage({
           </div>
           <div>
             <div className="font-display text-[15px] font-extrabold">
-              {post.author ?? "ReportajGO"}
+              {post.author ?? "ReportageGO"}
             </div>
             <div className="font-mono text-[11px] text-ink-soft">
-              {t("by")} · ReportajGO
+              {t("by")} · ReportageGO
             </div>
           </div>
         </div>

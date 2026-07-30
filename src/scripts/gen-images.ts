@@ -2,7 +2,7 @@
  * SCRIPT 1 — the Higgsfield image robot.
  *
  * "Open Higgsfield and generate a relatable photo for each news item", then
- * composite it into the branded ReportajGO card. Two modes:
+ * composite it into the branded ReportageGO card. Two modes:
  *
  *   • DB mode (default): generate media for every draft waiting in PENDING_MEDIA
  *     — the exact pipeline step, advancing each draft to PENDING_APPROVAL.
@@ -46,7 +46,7 @@ async function generateOne(headline: string, summary: string, topic: string, out
   const photo = await generateNewsPhoto(composePrompt(scene, "IMAGE"), ratio);
   console.log(`   photo → ${photo.url}`);
 
-  console.log(`\n🎴 Compositing the branded ReportajGO card …`);
+  console.log(`\n🎴 Compositing the branded ReportageGO card …`);
   const card = await saveBrandedCard(photo.bytes, headline);
   console.log(`\n✅ Card ready`);
   console.log(`   url  : ${card.cardUrl}`);

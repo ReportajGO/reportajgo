@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // BRAND / "OFFICIAL LOOK" STYLE TEMPLATE
 //
-// This is the single place that defines how ReportajGO's official news images
+// This is the single place that defines how ReportageGO's official news images
 // and videos look. The media prompt builder injects these strings into every
 // Higgsfield generation request.
 //
@@ -27,7 +27,7 @@ export interface BrandStyle {
 }
 
 export const BRAND_STYLE: BrandStyle = {
-  brandName: "ReportajGO",
+  brandName: "ReportageGO",
 
   imageStyle: [
     "Professional news-channel key visual.",

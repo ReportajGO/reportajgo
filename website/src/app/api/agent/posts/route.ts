@@ -70,7 +70,7 @@ export async function GET(req: Request) {
 }
 
 /**
- * POST /api/agent/posts — the ReportajGO agent submits a news item that a human
+ * POST /api/agent/posts — the ReportageGO agent submits a news item that a human
  * has ALREADY approved in the agent's Telegram bot. So it is published live
  * immediately (no second moderation step), translated into every site locale.
  *
