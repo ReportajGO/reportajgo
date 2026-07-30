@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "../db/client.js";
-import type { NewsPriority } from "../domain/types.js";
+import type { ContentFormat, MarketCode, NewsPriority } from "../domain/types.js";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
 
@@ -17,6 +17,20 @@ export const VALID_PLATFORMS = [
   "WEBSITE",
 ] as const;
 export type PlatformName = (typeof VALID_PLATFORMS)[number];
+
+// The 21 markets (TZ §8). Mirrors MARKETS in src/domain/markets.ts.
+export const VALID_MARKETS = [
+  "JP", "KR", "MY", "CN", "TW",
+  "TR", "DE", "FR", "UK", "SE", "AT", "RU", "ES",
+  "AE", "KW", "QA", "OM", "SA",
+  "US", "CA", "BR",
+] as const;
+
+// Production formats (TZ §7). Mirrors FORMATS in src/domain/formats.ts.
+export const VALID_FORMATS = [
+  "SHORT_VIDEO", "EXPLAINER_VIDEO", "TEXT_POST", "CAROUSEL",
+  "MINI_REPORTAGE", "INTERVIEW", "ARTICLE", "INFOGRAPHIC",
+] as const;
 
 /** The operator-editable runtime configuration. */
 export interface RuntimeConfig {
@@ -36,13 +50,25 @@ export interface RuntimeConfig {
    */
   researchPaused: boolean;
 
+  // ── Global network strategy (TZ §5, §7, §8, §19) ──
+  /** Markets this deployment publishes to. Derived from the rollout phase. */
+  activeMarkets: MarketCode[];
+  /** How many verticals each research cycle covers per market. */
+  verticalsPerRun: number;
+  /** Production formats the media pipeline can currently deliver. */
+  availableFormats: ContentFormat[];
+
   // ── Strong filter (applied in the ranking stage) ──
   /** Minimum editorial score (0..1) to be SELECTED for drafting. */
   minScore: number;
-  /** Minimum topical relevance (0..1). */
+  /** Minimum relevance (0..1) to the vertical and target market. */
   minRelevance: number;
   /** Lowest priority level that still gets drafted. */
   minPriority: NewsPriority;
+  /** Minimum constructive value (0..1) — the core editorial gate (TZ §4). */
+  minConstructiveness: number;
+  /** Minimum verifiability (0..1) — source discipline (TZ §4, §15). */
+  minVerifiability: number;
   /** Only allow these sources through (empty = allow all). */
   sourceAllowlist: string[];
   /** Drop items from these sources. */
@@ -72,9 +98,14 @@ const updateSchema = z
     maxItemsPerRun: z.coerce.number().int().positive().max(50),
     autoPublish: z.boolean(),
     researchPaused: z.boolean(),
+    activeMarkets: z.array(z.enum(VALID_MARKETS)).min(1),
+    verticalsPerRun: z.coerce.number().int().positive().max(7),
+    availableFormats: z.array(z.enum(VALID_FORMATS)).min(1),
     minScore: z.coerce.number().min(0).max(1),
     minRelevance: z.coerce.number().min(0).max(1),
     minPriority: z.enum(MIN_PRIORITY_VALUES),
+    minConstructiveness: z.coerce.number().min(0).max(1),
+    minVerifiability: z.coerce.number().min(0).max(1),
     // Allow/block lists may be empty (= no restriction), unlike topics/languages.
     sourceAllowlist: z.array(z.string().trim().min(1)),
     sourceBlocklist: z.array(z.string().trim().min(1)),
@@ -98,9 +129,14 @@ function envDefaults(): RuntimeConfig {
     maxItemsPerRun: env.MAX_ITEMS_PER_RUN,
     autoPublish: env.AUTO_PUBLISH,
     researchPaused: false,
+    activeMarkets: [...env.activeMarkets] as MarketCode[],
+    verticalsPerRun: env.VERTICALS_PER_RUN,
+    availableFormats: [...env.availableFormats] as ContentFormat[],
     minScore: env.MIN_SCORE,
     minRelevance: env.MIN_RELEVANCE,
     minPriority: env.MIN_PRIORITY as NewsPriority,
+    minConstructiveness: env.MIN_CONSTRUCTIVENESS,
+    minVerifiability: env.MIN_VERIFIABILITY,
     sourceAllowlist: [...env.sourceAllowlist],
     sourceBlocklist: [...env.sourceBlocklist],
     keywordAllowlist: [...env.keywordAllowlist],
@@ -144,12 +180,21 @@ async function loadOverrides(): Promise<Partial<RuntimeConfig>> {
   if (!row) return {};
   try {
     const raw = JSON.parse(row.value) as Record<string, unknown>;
-    // Drop any platforms no longer supported (e.g. a removed FACEBOOK) so one
-    // stale value can't invalidate the whole stored config.
-    if (Array.isArray(raw.enabledPlatforms)) {
-      const valid = (VALID_PLATFORMS as readonly string[]);
-      raw.enabledPlatforms = raw.enabledPlatforms.filter((p) => valid.includes(p as string));
-      if ((raw.enabledPlatforms as unknown[]).length === 0) delete raw.enabledPlatforms;
+    // Drop any enum values no longer supported (e.g. a removed FACEBOOK platform,
+    // or a market/format renamed by an editorial revision) so one stale entry
+    // can't invalidate the whole stored config. An emptied list falls back to the
+    // env default rather than failing validation on `.min(1)`.
+    for (const [key, valid] of [
+      ["enabledPlatforms", VALID_PLATFORMS],
+      ["activeMarkets", VALID_MARKETS],
+      ["availableFormats", VALID_FORMATS],
+    ] as const) {
+      const list = raw[key];
+      if (!Array.isArray(list)) continue;
+      const allowed = valid as readonly string[];
+      const kept = list.filter((v) => allowed.includes(v as string));
+      if (kept.length === 0) delete raw[key];
+      else raw[key] = kept;
     }
     const parsed = updateSchema.parse(raw);
     return parsed as Partial<RuntimeConfig>;
@@ -170,9 +215,14 @@ function merge(base: RuntimeConfig, over: Partial<RuntimeConfig>): RuntimeConfig
     maxItemsPerRun: over.maxItemsPerRun ?? base.maxItemsPerRun,
     autoPublish: over.autoPublish ?? base.autoPublish,
     researchPaused: over.researchPaused ?? base.researchPaused,
+    activeMarkets: over.activeMarkets ?? base.activeMarkets,
+    verticalsPerRun: over.verticalsPerRun ?? base.verticalsPerRun,
+    availableFormats: over.availableFormats ?? base.availableFormats,
     minScore: over.minScore ?? base.minScore,
     minRelevance: over.minRelevance ?? base.minRelevance,
     minPriority: over.minPriority ?? base.minPriority,
+    minConstructiveness: over.minConstructiveness ?? base.minConstructiveness,
+    minVerifiability: over.minVerifiability ?? base.minVerifiability,
     sourceAllowlist: over.sourceAllowlist ?? base.sourceAllowlist,
     sourceBlocklist: over.sourceBlocklist ?? base.sourceBlocklist,
     keywordAllowlist: over.keywordAllowlist ?? base.keywordAllowlist,
@@ -215,6 +265,12 @@ export async function updateRuntimeConfig(
   }
   if (clean.enabledPlatforms) {
     clean.enabledPlatforms = [...new Set(clean.enabledPlatforms)] as PlatformName[];
+  }
+  if (clean.activeMarkets) {
+    clean.activeMarkets = [...new Set(clean.activeMarkets)];
+  }
+  if (clean.availableFormats) {
+    clean.availableFormats = [...new Set(clean.availableFormats)];
   }
   // Filter lists: trim + dedupe (case preserved); empty is valid (= no restriction).
   for (const key of [

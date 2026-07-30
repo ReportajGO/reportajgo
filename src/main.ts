@@ -13,17 +13,17 @@ import { startDashboard } from "./dashboard/server.js";
 import { higgsfieldPreflight } from "./integrations/higgsfield/preflight.js";
 import { registerRepeatableJobs } from "./queue/schedule.js";
 import { startWorkers } from "./queue/workers.js";
-import { syncThemesToWebsite } from "./publish/themes.js";
+import { syncVerticalThemesToWebsite } from "./publish/themes.js";
 
 async function bootstrap() {
-  logger.info("ReportajGO agent starting");
+  logger.info("ReportageGO agent starting");
   const config = await initSettings(); // warm the runtime-config cache before anything reads it
   const server = startDashboard();
   const workers = startWorkers();
   const approvalBot = startApprovalBot();
   await registerRepeatableJobs();
-  // Make sure the website's themes reflect the current topic filters at startup.
-  void syncThemesToWebsite(config.researchTopics);
+  // Make sure the website's sections mirror the seven content verticals at startup.
+  void syncVerticalThemesToWebsite();
   // Self-check image generation so the logs show if the Higgsfield token/network is healthy.
   void higgsfieldPreflight();
   logger.info("agent ready");

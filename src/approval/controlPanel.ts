@@ -6,7 +6,11 @@ import {
   updateRuntimeConfig,
   VALID_PLATFORMS,
 } from "../config/settingsStore.js";
-import type { NewsPriority } from "../domain/types.js";
+import { MARKETS } from "../domain/markets.js";
+import { describe as describeQuota } from "../domain/quota.js";
+import type { MarketCode, NewsPriority } from "../domain/types.js";
+import { mixReport } from "../domain/verticals.js";
+import { getEditorialStateSafe } from "../strategy/editorialState.js";
 import { getStatus, publishAllPending, runPipelineNow } from "../dashboard/controlService.js";
 import { rateLimited } from "./auth.js";
 
@@ -23,11 +27,6 @@ import {
 const log = logger.child({ module: "control-panel" });
 
 const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"];
-const LANGS: { code: string; label: string }[] = [
-  { code: "uz", label: "Uzbek" },
-  { code: "ru", label: "Russian" },
-  { code: "en", label: "English" },
-];
 const CRON_PRESETS: { label: string; pattern: string }[] = [
   { label: "Every 1h", pattern: "0 * * * *" },
   { label: "Every 2h", pattern: "0 */2 * * *" },
@@ -39,10 +38,13 @@ const CRON_PRESETS: { label: string; pattern: string }[] = [
 // Strong-filter tuning presets.
 const SCORE_PRESETS = [0.45, 0.6, 0.7, 0.8];
 const RELEVANCE_PRESETS = [0.3, 0.5, 0.7];
-const PRIORITY_CHOICES: NewsPriority[] = ["LOW", "NORMAL", "HIGH", "BREAKING"];
+// BREAKING is deliberately absent: the ranker no longer assigns it (the network
+// does not publish breaking news), so offering it would set a floor nothing can
+// clear and silently empty the queue.
+const PRIORITY_CHOICES: NewsPriority[] = ["LOW", "NORMAL", "HIGH"];
 
 // chatId -> which value we're waiting for them to type next.
-const pending = new Map<number, "cron" | "topic">();
+const pending = new Map<number, "cron">();
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 async function applySettings(patch: Record<string, unknown>): Promise<void> {
@@ -65,19 +67,26 @@ async function safeEdit(ctx: Context, text: string, markup: unknown): Promise<vo
 export async function mainMenu(): Promise<{ text: string; markup: ReturnType<typeof Markup.inlineKeyboard> }> {
   const cfg = await getRuntimeConfig();
   const active = await isResearchCronActive();
+  // Quota + mix are the strategy's headline KPIs (TZ §15), so they lead the panel.
+  const state = await getEditorialStateSafe();
+  const q = state.quota;
+  const quotaIcon =
+    q.verdict === "ON_TARGET" ? "✅" : q.verdict === "UNDETERMINED" ? "➖" : "⚠️";
+
   const text =
-    `🤖 <b>ReportajGO — Control Panel</b>\n\n` +
+    `🌍 <b>ReportageGO — Global Media Network</b>\n\n` +
     `Auto-research: <b>${active ? `ON · ${cfg.researchCron}` : "PAUSED"}</b>\n` +
-    `Auto-publish: <b>${cfg.autoPublish ? "ON — posts itself, no approval" : "OFF — approve first"}</b>\n` +
-    `Limit: <b>${cfg.maxItemsPerRun}/run</b> · Freshness: <b>${cfg.researchMaxAgeHours}h</b>\n` +
-    `Filter: <b>score ≥ ${cfg.minScore} · priority ≥ ${cfg.minPriority}</b>\n` +
-    `Model: <b>${cfg.geminiModel}</b>\n` +
-    `Languages: <b>${cfg.contentLanguages.join(", ")}</b>`;
+    `Auto-publish: <b>${cfg.autoPublish ? "ON — tier A only, B/C held for review" : "OFF — approve first"}</b>\n` +
+    `Markets: <b>${cfg.activeMarkets.length}</b> (${cfg.activeMarkets.slice(0, 6).join(", ")}${cfg.activeMarkets.length > 6 ? "…" : ""})\n` +
+    `${quotaIcon} UZ quota: <b>${q.share}%</b> of ${q.totalCount} (target 18–22%)\n` +
+    `Limit: <b>${cfg.maxItemsPerRun}/run</b> · Verticals: <b>${cfg.verticalsPerRun}/run</b>\n` +
+    `Gate: <b>constructive ≥ ${cfg.minConstructiveness} · verified ≥ ${cfg.minVerifiability}</b>\n` +
+    `Model: <b>${cfg.geminiModel}</b>`;
   const markup = Markup.inlineKeyboard([
     [Markup.button.callback("⏰ Schedule", "cp:schedule"), Markup.button.callback(`🔢 Limit (${cfg.maxItemsPerRun})`, "cp:limit")],
     [Markup.button.callback(`🔍 Freshness (${cfg.researchMaxAgeHours}h)`, "cp:freshness"), Markup.button.callback("🧠 AI model", "cp:model")],
     [Markup.button.callback(`🎯 Filter (≥${cfg.minScore} · ${cfg.minPriority})`, "cp:filter")],
-    [Markup.button.callback("📁 Topics", "cp:topics"), Markup.button.callback("🌐 Languages", "cp:langs")],
+    [Markup.button.callback("🌍 Markets", "cp:markets"), Markup.button.callback("📊 Editorial mix", "cp:mix")],
     [Markup.button.callback("📱 Platforms", "cp:platforms"), Markup.button.callback("📊 Status", "cp:status")],
     [Markup.button.callback(active ? "⏸️ Pause auto-research" : "▶️ Resume auto-research", "cp:togglecron")],
     [Markup.button.callback(cfg.autoPublish ? "🤖 Auto-publish: ON" : "🤖 Auto-publish: OFF", "cp:toggleauto")],
@@ -85,6 +94,49 @@ export async function mainMenu(): Promise<{ text: string; markup: ReturnType<typ
     [Markup.button.callback("🚀 Publish all pending", "cp:publishall")],
   ]);
   return { text, markup };
+}
+
+/** Markets screen: toggle which of the 21 markets this deployment publishes to. */
+async function marketsScreen(): Promise<{ text: string; markup: ReturnType<typeof Markup.inlineKeyboard> }> {
+  const cfg = await getRuntimeConfig();
+  const active = new Set(cfg.activeMarkets);
+  const text =
+    `🌍 <b>Markets</b> — ${active.size} of ${MARKETS.length} active\n\n` +
+    `Each market publishes in its own language on its own platforms.\n` +
+    `Tap to toggle.`;
+
+  // Four per row keeps the 21 codes readable on a phone.
+  const rows: ReturnType<typeof Markup.button.callback>[][] = [];
+  for (let i = 0; i < MARKETS.length; i += 4) {
+    rows.push(
+      MARKETS.slice(i, i + 4).map((m) =>
+        Markup.button.callback(
+          `${active.has(m.code) ? "✅" : "⬜"} ${m.code}`,
+          `cp:togglemarket:${m.code}`,
+        ),
+      ),
+    );
+  }
+  rows.push(backRow());
+  return { text, markup: Markup.inlineKeyboard(rows) };
+}
+
+/** Editorial mix screen: vertical drift against target shares (TZ §5.2, §15). */
+async function mixScreen(): Promise<{ text: string; markup: ReturnType<typeof Markup.inlineKeyboard> }> {
+  const state = await getEditorialStateSafe();
+  const rows = mixReport(state.verticalCounts);
+  const lines = rows.map((r) => {
+    const icon = Math.abs(r.drift) <= 3 ? "✅" : r.drift > 0 ? "🔼" : "🔽";
+    const sign = r.drift > 0 ? "+" : "";
+    return `${icon} ${r.vertical}: <b>${r.actual}%</b> / ${r.target}% (${sign}${r.drift})`;
+  });
+
+  const text =
+    `📊 <b>Editorial mix</b> — last 30 days\n\n` +
+    `${lines.join("\n")}\n\n` +
+    `${describeQuota(state.quota)}\n\n` +
+    `Research automatically favours whichever vertical is furthest below target.`;
+  return { text, markup: Markup.inlineKeyboard([backRow()]) };
 }
 
 function backRow() {
@@ -199,25 +251,11 @@ export function registerControlPanel(bot: Telegraf): void {
     await safeEdit(ctx, text, markup);
   });
 
-  // Languages (toggle)
-  bot.action("cp:langs", async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    await safeEdit(ctx, "🌐 <b>Content languages</b> (first = primary):", await langsMarkup());
-  });
-  bot.action(/^cp:togglelang:(\w+)$/, async (ctx) => {
-    const cfg = await getRuntimeConfig();
-    const code = ctx.match[1]!;
-    const set = new Set(cfg.contentLanguages);
-    if (set.has(code)) set.delete(code);
-    else set.add(code);
-    if (set.size === 0) {
-      await ctx.answerCbQuery("Keep at least one language", { show_alert: true }).catch(() => {});
-      return;
-    }
-    await applySettings({ contentLanguages: [...set] });
-    await ctx.answerCbQuery("Updated ✓").catch(() => {});
-    await safeEdit(ctx, "🌐 <b>Content languages</b> (first = primary):", await langsMarkup());
-  });
+  // NOTE: the language and topic screens were removed with the Global Media
+  // Network strategy. Publication language is no longer an operator toggle — it
+  // is a property of each market (Japan publishes Japanese, Saudi publishes
+  // Arabic), so it is set by the Markets screen. Topics are the seven fixed
+  // verticals, which are editorial policy rather than configuration.
 
   // Platforms (toggle)
   bot.action("cp:platforms", async (ctx) => {
@@ -239,27 +277,33 @@ export function registerControlPanel(bot: Telegraf): void {
     await safeEdit(ctx, "📱 <b>Enabled platforms</b>:", await platformsMarkup());
   });
 
-  // Topics (list + add/remove)
-  bot.action("cp:topics", async (ctx) => {
+  // Markets (toggle which of the 21 markets are active)
+  bot.action("cp:markets", async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
-    await safeEdit(ctx, await topicsText(), await topicsMarkup());
+    const { text, markup } = await marketsScreen();
+    await safeEdit(ctx, text, markup);
   });
-  bot.action(/^cp:rmtopic:(\d+)$/, async (ctx) => {
+  bot.action(/^cp:togglemarket:([A-Z]{2})$/, async (ctx) => {
     const cfg = await getRuntimeConfig();
-    const idx = Number(ctx.match[1]);
-    if (cfg.researchTopics.length <= 1) {
-      await ctx.answerCbQuery("Keep at least one topic", { show_alert: true }).catch(() => {});
+    const code = ctx.match[1] as MarketCode;
+    const set = new Set(cfg.activeMarkets);
+    if (set.has(code)) set.delete(code);
+    else set.add(code);
+    if (set.size === 0) {
+      await ctx.answerCbQuery("Keep at least one market", { show_alert: true }).catch(() => {});
       return;
     }
-    const next = cfg.researchTopics.filter((_, i) => i !== idx);
-    await applySettings({ researchTopics: next });
-    await ctx.answerCbQuery("Removed ✓").catch(() => {});
-    await safeEdit(ctx, await topicsText(), await topicsMarkup());
+    await applySettings({ activeMarkets: [...set] });
+    await ctx.answerCbQuery("Updated ✓").catch(() => {});
+    const { text, markup } = await marketsScreen();
+    await safeEdit(ctx, text, markup);
   });
-  bot.action("cp:prompttopic", async (ctx) => {
-    pending.set(ctx.chat!.id, "topic");
+
+  // Editorial mix (vertical drift vs target shares + quota position)
+  bot.action("cp:mix", async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
-    await ctx.reply("➕ Send a topic to research (e.g. <i>Global technology news</i>):", { parse_mode: "HTML" });
+    const { text, markup } = await mixScreen();
+    await safeEdit(ctx, text, markup);
   });
 
   // Status
@@ -343,10 +387,6 @@ export async function handleControlPanelText(ctx: Context): Promise<boolean> {
       }
       await applySettings({ researchCron: text });
       await ctx.reply(`✅ Schedule set to <code>${text}</code>`, { parse_mode: "HTML" });
-    } else if (field === "topic") {
-      const cfg = await getRuntimeConfig();
-      await applySettings({ researchTopics: [...cfg.researchTopics, text] });
-      await ctx.reply(`✅ Topic added: <b>${escapeHtml(text)}</b>`, { parse_mode: "HTML" });
     }
     const { text: menuText, markup } = await mainMenu();
     await ctx.reply(menuText, { parse_mode: "HTML", ...markup });
@@ -357,34 +397,11 @@ export async function handleControlPanelText(ctx: Context): Promise<boolean> {
 }
 
 // ── submenu builders ─────────────────────────────────────────────────────────
-async function langsMarkup() {
-  const cfg = await getRuntimeConfig();
-  const rows = LANGS.map((l) => [
-    Markup.button.callback(`${cfg.contentLanguages.includes(l.code) ? "✅" : "⬜"} ${l.label}`, `cp:togglelang:${l.code}`),
-  ]);
-  rows.push(backRow());
-  return Markup.inlineKeyboard(rows);
-}
-
 async function platformsMarkup() {
   const cfg = await getRuntimeConfig();
   const rows = VALID_PLATFORMS.map((p) => [
     Markup.button.callback(`${cfg.enabledPlatforms.includes(p) ? "✅" : "⬜"} ${p}`, `cp:toggleplat:${p}`),
   ]);
-  rows.push(backRow());
-  return Markup.inlineKeyboard(rows);
-}
-
-async function topicsText(): Promise<string> {
-  const cfg = await getRuntimeConfig();
-  return `📁 <b>Research topics</b>\n${cfg.researchTopics.map((t, i) => `${i + 1}. ${escapeHtml(t)}`).join("\n")}`;
-}
-async function topicsMarkup() {
-  const cfg = await getRuntimeConfig();
-  const rows = cfg.researchTopics.map((t, i) => [
-    Markup.button.callback(`❌ ${t.length > 28 ? t.slice(0, 27) + "…" : t}`, `cp:rmtopic:${i}`),
-  ]);
-  rows.push([Markup.button.callback("➕ Add topic", "cp:prompttopic")]);
   rows.push(backRow());
   return Markup.inlineKeyboard(rows);
 }

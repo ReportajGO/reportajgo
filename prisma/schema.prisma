@@ -31,13 +31,44 @@ model NewsItem {
   // the full story on the site.
   websiteUrl String?
 
+  // ─── Global network strategy (TZ §5, §8) ──────────────────────────────────
+  // Content vertical this item belongs to, and its target market. Together with
+  // `uzbekistanQuota` these drive the editorial mix: 7 verticals at fixed
+  // shares, 21 markets, and 20% ±2% Uzbekistan content every month.
+  vertical Vertical?
+  market   String? // MarketCode, e.g. "JP" — see src/domain/markets.ts
+  /// True when this item counts toward the monthly 20% Uzbekistan quota (TZ §5.2).
+  uzbekistanQuota Boolean @default(false)
+  /// The solution / opportunity / useful takeaway that makes this publishable
+  /// under the constructive-agenda principle (TZ §4). Required by strategy.
+  constructiveAngle String? @db.Text
+  /// Corroborating source URLs beyond `sourceUrl` (TZ §4 source discipline).
+  additionalSources String[] @default([])
+
   // Ranking (filled by the filter stage)
   score       Float?
   relevance   Float?
   rankReasons String? @db.Text
-  // Editorial priority level, assigned by the ranker alongside score. Drives
-  // publish ordering (breaking jumps the queue) and the website "breaking" badge.
+  // Editorial priority level, assigned by the ranker alongside score.
+  //
+  // NOTE: the ranker no longer assigns BREAKING — the network does not publish
+  // urgency-driven material (TZ §6). The value is kept for historical rows and
+  // for the website badge, but nothing promotes an item for being urgent.
   priority NewsPriority?
+  /// 0..1 constructive value: solution, opportunity, progress, useful knowledge.
+  constructiveness Float?
+  /// 0..1 confidence that every claim is verifiable from the named sources.
+  verifiability Float?
+
+  // ─── Compliance (TZ §6, §6.1, §10.1) ──────────────────────────────────────
+  /// GREEN = normal path, YELLOW = extra handling + tier C, RED = prohibited.
+  complianceZone ComplianceZone?
+  /// Prohibited categories matched (non-empty only when zone is RED).
+  bannedCategories BannedCategory[] @default([])
+  /// Yellow-zone rule ids that apply, e.g. "state-decision", "medical".
+  yellowRules String[] @default([])
+  /// Minimum approval level required before publication (TZ §10.1).
+  approvalTier ApprovalTier?
 
   status NewsStatus @default(NEW)
 
@@ -45,6 +76,59 @@ model NewsItem {
 
   @@index([status])
   @@index([fetchedAt])
+  @@index([vertical])
+  @@index([uzbekistanQuota])
+  @@index([market])
+}
+
+/// The seven content verticals with fixed editorial shares (TZ §5.1/§5.2).
+enum Vertical {
+  ECONOMY // 25% — iqtisod va investitsiya
+  INNOVATION // 15% — kashfiyot va innovatsiya
+  SCIENCE // 15% — ilm-fan va ta'lim
+  STARTUP // 15% — startap va tadbirkorlik
+  PEOPLE // 15% — yoshlar va ayollar
+  FACTS //  8% — faktlar
+  HISTORY //  7% — tarixiy mavzular
+}
+
+/// Production formats and their target mix (TZ §7/§7.1).
+enum ContentFormat {
+  SHORT_VIDEO // 15-45s, 9:16
+  EXPLAINER_VIDEO // 60-120s
+  TEXT_POST // 80-180 words
+  CAROUSEL // 5-8 slides
+  MINI_REPORTAGE // 3-5 min
+  INTERVIEW
+  ARTICLE // 400-900 words
+  INFOGRAPHIC
+}
+
+/// Compliance classification of a candidate (TZ §6/§6.1).
+enum ComplianceZone {
+  GREEN // publishable on the normal path
+  YELLOW // publishable only with §6.1 handling + tier C approval
+  RED // prohibited; dropped, never drafted
+}
+
+/// Absolutely prohibited content categories (TZ §6).
+enum BannedCategory {
+  POLITICS
+  GEOPOLITICS
+  CONFLICT
+  CRIME
+  DISASTER
+  VIOLENCE
+  SCANDAL
+  MANIPULATION
+  DIVISIVE_HISTORY
+}
+
+/// Approval ladder level (TZ §10.1).
+enum ApprovalTier {
+  A // desk editor + native editor
+  B // fact-checker + editor-in-chief
+  C // compliance + editor-in-chief (+ legal if required)
 }
 
 enum NewsStatus {
@@ -74,6 +158,33 @@ model PostDraft {
   body     String   @db.Text
   hashtags String[] @default([])
 
+  // ─── Per-market version (TZ §8) ────────────────────────────────────────────
+  // One master story becomes a distinct version per market: local language,
+  // local platform, local framing. "The same post everywhere" is prohibited.
+  market String? // MarketCode, e.g. "SA" — see src/domain/markets.ts
+  /// Production format this draft was written against (TZ §7).
+  format ContentFormat?
+
+  // ─── Content passport (TZ §7.2) ────────────────────────────────────────────
+  // Full provenance record for the published material. Stored as JSON so the
+  // passport can gain fields without a migration per editorial revision; the
+  // authoritative shape is `ContentPassport` in src/domain/types.ts.
+  passport Json?
+  /// Approval level this draft requires before publishing (TZ §10.1).
+  approvalTier ApprovalTier?
+  /// Native-language editor sign-off. Strategy requires 100% native QA before
+  /// publication (TZ §11, §15) — no draft publishes on machine translation alone.
+  nativeQaBy String?
+  nativeQaAt DateTime?
+  /// Fact-check sign-off, mandatory for tier B and C material (TZ §10.1).
+  factCheckedBy String?
+  factCheckedAt DateTime?
+  /// Set when the material is sponsored/partnership content, which must be
+  /// labelled openly and separated from editorial copy (TZ §4, §18, §20).
+  partnershipLabel Boolean @default(false)
+  /// UTM-tagged tracking link, so social reach is attributable (TZ §15, §16).
+  utmUrl String?
+
   status PostStatus @default(PENDING_MEDIA)
 
   // Approval audit
@@ -90,6 +201,12 @@ model PostDraft {
 
   @@index([status])
   @@index([platform])
+  @@index([market])
+  @@index([format])
+  // One draft per (story, platform, market). A story now fans out to many
+  // drafts, and a partially-failed fan-out has to be safe to re-run — without
+  // this constraint a retry would duplicate the versions that already succeeded.
+  @@unique([newsItemId, platform, market])
 }
 
 enum Platform {

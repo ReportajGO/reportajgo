@@ -104,6 +104,9 @@ const schema = z.object({
   REPLICATE_API_TOKEN: z.string().optional(),
 
   CONTENT_LANGUAGES: z.string().default("uz,ru,en"),
+  // Legacy free-text topic list. Superseded by the seven fixed content verticals
+  // in src/domain/verticals.ts (TZ §5.1/§5.2), which the research stage now
+  // drives from. Retained only so an existing .env keeps parsing.
   RESEARCH_TOPICS: z
     .string()
     .default("World news,Breaking international news,Global technology and business"),
@@ -111,6 +114,30 @@ const schema = z.object({
   RESEARCH_SOURCES: z
     .string()
     .default("CNN,BBC,Reuters,Associated Press,Al Jazeera,The Guardian,Bloomberg"),
+
+  // ─── Global Media Network strategy (TZ §5, §8, §13, §19) ───────────────────
+  // Rollout phase, which determines the active market set (TZ §19):
+  //   1 = pilot      — Japan, South Korea, China, Malaysia, Türkiye, UAE
+  //   2 = expansion  — adds Germany, France, UK, Russia, Saudi Arabia, US, Brazil
+  //   3 = full       — all 21 markets
+  ROLLOUT_PHASE: z.coerce.number().int().min(1).max(3).default(1),
+  // Explicit market allowlist (comma-separated codes, e.g. "JP,KR,AE"). When set
+  // it overrides ROLLOUT_PHASE — use it to run a single market while testing, so
+  // one pipeline run doesn't fan out across every pilot market at once.
+  ACTIVE_MARKETS: z.string().default(""),
+  // How many verticals each research cycle covers per market. The cycle picks
+  // whichever verticals are furthest below their target share (TZ §5.2).
+  VERTICALS_PER_RUN: z.coerce.number().int().positive().max(7).default(2),
+  // Production formats the media pipeline can currently deliver. Video formats
+  // require the video engine; drop them from this list until it is wired, and the
+  // format balancer will distribute across the remaining ones instead.
+  AVAILABLE_FORMATS: z.string().default("TEXT_POST,CAROUSEL,ARTICLE,INFOGRAPHIC"),
+  // Minimum constructive value (0..1) — solution / opportunity / progress /
+  // useful knowledge. The core editorial gate of the network (TZ §4).
+  MIN_CONSTRUCTIVENESS: z.coerce.number().min(0).max(1).default(0.6),
+  // Minimum verifiability (0..1): can every claim be traced to a named source
+  // (TZ §4 source discipline, §15 "manba intizomi 100%").
+  MIN_VERIFIABILITY: z.coerce.number().min(0).max(1).default(0.6),
   ENABLED_PLATFORMS: z.string().default("TELEGRAM"),
   // When true, the pipeline auto-approves and publishes each ready story to all
   // enabled platforms with no human approval step ("share itself"). Default off.
@@ -129,7 +156,7 @@ const schema = z.object({
   DASHBOARD_USERNAME: z.string().default("admin"),
   DASHBOARD_PASSWORD: z.string().optional(),
 
-  // ReportajGO website (cross-post target). The agent POSTs approved articles
+  // ReportageGO website (cross-post target). The agent POSTs approved articles
   // to WEBSITE_API_URL/api/agent/posts with WEBSITE_API_KEY as a bearer token.
   WEBSITE_API_URL: z.string().default("http://localhost:3000"),
   WEBSITE_API_KEY: z.string().optional(),
@@ -179,7 +206,7 @@ const schema = z.object({
   // ─── Telegram/social card renderer ──────────────────────────────────────────
   //  - "builtin":  the original photo+gradient+headline card (card.ts).
   //  - "template": code reproduction of the Canva post template — rounded photo,
-  //                REPORTAJGO badge, red headline on white (templateCard.ts).
+  //                REPORTAGE GO badge, red headline on white (templateCard.ts).
   //  - "canva":    drive the Canva editor (Playwright). Unsafe/brittle — see
   //                [[canva-card-renderer]]; not for production.
   CARD_RENDERER: z.enum(["builtin", "template", "canva"]).default("builtin"),
@@ -252,24 +279,39 @@ const schema = z.object({
   APPROVERS: z.string().default(""),
 
   RESEARCH_CRON: z.string().default("0 */2 * * *"),
-  // Max age of a news item to be considered fresh. News older than this is
-  // dropped — for a daily channel, anything from a previous day is stale.
-  RESEARCH_MAX_AGE_HOURS: z.coerce.number().int().positive().default(24),
-  // Cap on how many top-ranked news items get drafted per pipeline run, so a
-  // high-volume topic can't flood the approval queue. Overflow is filtered out.
+  // Preferred recency window, in hours. This is a SOFT preference passed to the
+  // research prompt, not a hard cut: the network publishes constructive and
+  // evergreen material (TZ §21 asks for a bank of evergreen ideas per market),
+  // so a strong item is not discarded merely for being older. Default one week.
+  RESEARCH_MAX_AGE_HOURS: z.coerce.number().int().positive().default(168),
+  // Cap on how many top-ranked news items get drafted per pipeline run, so one
+  // vertical can't flood the approval queue. Overflow is filtered out.
+  // NOTE: each item fans out to (markets x platforms) drafts, so the real draft
+  // volume is this number multiplied by the active market and platform counts.
   MAX_ITEMS_PER_RUN: z.coerce.number().int().positive().default(8),
   // Auto-delete news items (and their drafts/media/scheduled posts) older than
   // this many hours, keeping the agent DB lean. Published website articles live
   // in the website's own DB and are unaffected.
-  NEWS_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
+  //
+  // Default 720h (30 days), NOT 24h. Two things now depend on this history:
+  //   1. Dedupe. Items are de-duplicated by a unique contentHash on NewsItem. If
+  //      retention is shorter than RESEARCH_MAX_AGE_HOURS, a purged evergreen
+  //      story is re-discovered by the next cycle and published a second time.
+  //   2. Mix balancing. The vertical/format balancers measure the last 30 days of
+  //      SELECTED/DRAFTED items to find which shares are under-served. Purging at
+  //      24h would leave them with almost no history to balance against, so the
+  //      editorial mix would drift back to whatever research happened to return.
+  NEWS_RETENTION_HOURS: z.coerce.number().int().positive().default(720),
 
   // ── News priority + strong filter (all live-tunable via the control panel) ──
   // Minimum editorial score (0..1) a story must reach to be SELECTED for
   // drafting. Higher = stricter. Defaults above the old 0.45 hard floor.
   MIN_SCORE: z.coerce.number().min(0).max(1).default(0.6),
-  // Minimum topical relevance (0..1) to the configured topics.
+  // Minimum relevance (0..1) to the vertical and the target market.
   MIN_RELEVANCE: z.coerce.number().min(0).max(1).default(0.5),
   // Lowest priority level that still gets drafted; anything below is dropped.
+  // Note BREAKING is no longer assigned by the ranker (TZ §6) — setting it here
+  // would filter out everything, so it is not a useful value.
   MIN_PRIORITY: z.enum(["LOW", "NORMAL", "HIGH", "BREAKING"]).default("NORMAL"),
   // Optional source/keyword gates (comma-separated, case-insensitive substring).
   // An allowlist is only enforced when non-empty. Applied before the LLM call.
@@ -323,6 +365,50 @@ if (enabledPlatforms.length === 0) {
   );
 }
 
+// ─── Active markets and formats (TZ §8, §19, §7.1) ───────────────────────────
+// Resolved here rather than in the domain modules so the whole app shares one
+// answer. `domain/markets.ts` stays a pure data/lookup module with no env
+// dependency, so it can be unit-tested and reused by the website.
+
+const VALID_MARKETS = [
+  "JP", "KR", "MY", "CN", "TW",
+  "TR", "DE", "FR", "UK", "SE", "AT", "RU", "ES",
+  "AE", "KW", "QA", "OM", "SA",
+  "US", "CA", "BR",
+] as const;
+type MarketName = (typeof VALID_MARKETS)[number];
+
+// Phase → the markets it activates, mirroring the `phase` field in MARKETS.
+const PHASE_MARKETS: Record<1 | 2 | 3, MarketName[]> = {
+  1: ["JP", "KR", "MY", "CN", "TR", "AE"],
+  2: ["JP", "KR", "MY", "CN", "TR", "AE", "DE", "FR", "UK", "RU", "SA", "US", "BR"],
+  3: [...VALID_MARKETS],
+};
+
+const explicitMarkets = csv(raw.ACTIVE_MARKETS)
+  .map((m) => m.toUpperCase())
+  .filter((m): m is MarketName => (VALID_MARKETS as readonly string[]).includes(m));
+
+const activeMarkets: MarketName[] = explicitMarkets.length
+  ? explicitMarkets
+  : PHASE_MARKETS[raw.ROLLOUT_PHASE as 1 | 2 | 3];
+
+const VALID_FORMATS = [
+  "SHORT_VIDEO", "EXPLAINER_VIDEO", "TEXT_POST", "CAROUSEL",
+  "MINI_REPORTAGE", "INTERVIEW", "ARTICLE", "INFOGRAPHIC",
+] as const;
+type FormatName = (typeof VALID_FORMATS)[number];
+
+const availableFormats = csv(raw.AVAILABLE_FORMATS)
+  .map((f) => f.toUpperCase())
+  .filter((f): f is FormatName => (VALID_FORMATS as readonly string[]).includes(f));
+
+if (availableFormats.length === 0) {
+  throw new Error(
+    `AVAILABLE_FORMATS must list at least one of: ${VALID_FORMATS.join(", ")}`,
+  );
+}
+
 export const env = {
   ...raw,
   // Default the public base URL to the local dashboard so generated media has a
@@ -333,6 +419,10 @@ export const env = {
   contentLanguages: csv(raw.CONTENT_LANGUAGES),
   researchTopics: csv(raw.RESEARCH_TOPICS),
   researchSources: csv(raw.RESEARCH_SOURCES),
+  // Global network strategy: the active market set and the formats the media
+  // pipeline can currently produce.
+  activeMarkets,
+  availableFormats,
   sourceAllowlist: csv(raw.SOURCE_ALLOWLIST),
   sourceBlocklist: csv(raw.SOURCE_BLOCKLIST),
   keywordAllowlist: csv(raw.KEYWORD_ALLOWLIST),

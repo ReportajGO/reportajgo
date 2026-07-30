@@ -58,15 +58,43 @@ function preFilter(
   return null;
 }
 
+/** Thresholds the editorial gate is evaluated against. */
+interface KeepThresholds {
+  minScore: number;
+  minRelevance: number;
+  minPriority: RankVerdict["priority"];
+  minConstructiveness: number;
+  minVerifiability: number;
+}
+
+/**
+ * Whether a ranked item clears the editorial gate.
+ *
+ * Compliance is checked first and separately by the caller: a RED verdict is not
+ * a threshold failure that better scores could offset, it is a prohibition.
+ */
+function meetsThresholds(v: RankVerdict, cfg: KeepThresholds): boolean {
+  return (
+    v.score >= cfg.minScore &&
+    v.relevance >= cfg.minRelevance &&
+    v.constructiveness >= cfg.minConstructiveness &&
+    v.verifiability >= cfg.minVerifiability &&
+    meetsMinPriority(v.priority, cfg.minPriority)
+  );
+}
+
 /** Explain why a ranked item fell short of the keep thresholds. */
-function dropReason(
-  v: RankVerdict,
-  cfg: { minScore: number; minRelevance: number; minPriority: RankVerdict["priority"] },
-): string {
+function dropReason(v: RankVerdict, cfg: KeepThresholds): string {
   const fails: string[] = [];
   if (v.score < cfg.minScore) fails.push(`score ${v.score.toFixed(2)}<${cfg.minScore}`);
   if (v.relevance < cfg.minRelevance) {
     fails.push(`relevance ${v.relevance.toFixed(2)}<${cfg.minRelevance}`);
+  }
+  if (v.constructiveness < cfg.minConstructiveness) {
+    fails.push(`constructiveness ${v.constructiveness.toFixed(2)}<${cfg.minConstructiveness}`);
+  }
+  if (v.verifiability < cfg.minVerifiability) {
+    fails.push(`verifiability ${v.verifiability.toFixed(2)}<${cfg.minVerifiability}`);
   }
   if (!meetsMinPriority(v.priority, cfg.minPriority)) {
     fails.push(`priority ${v.priority}<${cfg.minPriority}`);
@@ -94,6 +122,12 @@ export async function persistNewItems(items: ResearchedNews[]): Promise<string[]
           topic: item.topic ?? null,
           publishedAt: item.publishedAt ?? null,
           contentHash: hash,
+          // Strategy dimensions carried from the research brief (TZ §5, §8).
+          vertical: item.vertical ?? null,
+          market: item.market ?? null,
+          uzbekistanQuota: item.uzbekistanQuota ?? false,
+          constructiveAngle: item.constructiveAngle ?? null,
+          additionalSources: item.additionalSources ?? [],
           status: "NEW",
         },
         select: { id: true },
@@ -111,10 +145,19 @@ export async function persistNewItems(items: ResearchedNews[]): Promise<string[]
 }
 
 /**
- * Rank all NEW items and mark them SELECTED or FILTERED_OUT. Applies the
- * operator-tunable "strong filter": a cheap deterministic source/keyword gate
- * first, then the LLM editorial ranking gated on min score, min relevance, and
- * min priority level. All thresholds come from runtime config (live-editable).
+ * Rank all NEW items and mark them SELECTED or FILTERED_OUT.
+ *
+ * Three gates, cheapest first:
+ *   1. Deterministic source/keyword gate — no LLM cost (operator-tunable lists).
+ *   2. COMPLIANCE — prohibited categories and blocking yellow-zone rules
+ *      (TZ §6, §6.1). A RED verdict drops the item unconditionally: no score is
+ *      high enough to publish prohibited material, so this is checked before the
+ *      editorial thresholds and is never weighed against them.
+ *   3. Editorial thresholds — score, relevance, constructiveness, verifiability
+ *      and priority, all live-tunable from the control panel.
+ *
+ * Yellow-zone items are KEPT but carry their handling rules and a raised
+ * approval tier, so the approval stage can require the right sign-offs.
  */
 export async function rankPendingItems(): Promise<{ selected: number; dropped: number }> {
   const cfg = await getRuntimeConfig();
@@ -122,6 +165,8 @@ export async function rankPendingItems(): Promise<{ selected: number; dropped: n
   let selected = 0;
   let dropped = 0;
   let preFiltered = 0;
+  let prohibited = 0;
+  let yellow = 0;
   let errored = 0;
 
   for (const item of pending) {
@@ -137,9 +182,9 @@ export async function rankPendingItems(): Promise<{ selected: number; dropped: n
       continue;
     }
 
-    // 2) Editorial LLM ranking, gated on the runtime thresholds. On a transient
-    //    ranking failure, leave the item NEW so the next run retries it instead
-    //    of permanently dropping a possibly-newsworthy story.
+    // 2) Editorial ranking + compliance classification. On a transient failure,
+    //    leave the item NEW so the next run retries it instead of permanently
+    //    dropping a possibly-valuable story.
     let verdict: RankVerdict;
     try {
       verdict = await rankNews(item);
@@ -148,25 +193,61 @@ export async function rankPendingItems(): Promise<{ selected: number; dropped: n
       errored++;
       continue;
     }
-    const keep =
-      verdict.score >= cfg.minScore &&
-      verdict.relevance >= cfg.minRelevance &&
-      meetsMinPriority(verdict.priority, cfg.minPriority);
+
+    const { compliance } = verdict;
+
+    // 3) Compliance is decisive and is evaluated on its own. Prohibited material
+    //    is dropped regardless of how well it scored.
+    if (compliance.zone === "RED") {
+      await prisma.newsItem.update({
+        where: { id: item.id },
+        data: {
+          score: verdict.score,
+          relevance: verdict.relevance,
+          constructiveness: verdict.constructiveness,
+          verifiability: verdict.verifiability,
+          priority: verdict.priority,
+          complianceZone: "RED",
+          bannedCategories: compliance.bannedCategories,
+          yellowRules: compliance.yellowRules,
+          approvalTier: compliance.tier,
+          rankReasons: `prohibited — ${compliance.reason}`,
+          status: "FILTERED_OUT",
+        },
+      });
+      dropped++;
+      prohibited++;
+      continue;
+    }
+
+    const keep = meetsThresholds(verdict, cfg);
+    if (keep && compliance.zone === "YELLOW") yellow++;
 
     await prisma.newsItem.update({
       where: { id: item.id },
       data: {
         score: verdict.score,
         relevance: verdict.relevance,
+        constructiveness: verdict.constructiveness,
+        verifiability: verdict.verifiability,
         priority: verdict.priority,
-        rankReasons: keep ? verdict.reasons : dropReason(verdict, cfg),
+        complianceZone: compliance.zone,
+        bannedCategories: compliance.bannedCategories,
+        yellowRules: compliance.yellowRules,
+        approvalTier: compliance.tier,
+        rankReasons: keep
+          ? `${verdict.reasons}${compliance.zone === "YELLOW" ? ` [yellow zone: ${compliance.yellowRules.join(", ")} — tier ${compliance.tier}]` : ""}`
+          : dropReason(verdict, cfg),
         status: keep ? "SELECTED" : "FILTERED_OUT",
       },
     });
     keep ? selected++ : dropped++;
   }
 
-  log.info({ selected, dropped, preFiltered, errored }, "ranking complete");
+  log.info(
+    { selected, dropped, preFiltered, prohibited, yellow, errored },
+    "ranking complete",
+  );
   return { selected, dropped };
 }
 

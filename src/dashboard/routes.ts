@@ -6,7 +6,6 @@ import {
   reRegisterResearchCron,
   resumeResearchCron,
 } from "../queue/schedule.js";
-import { syncThemesToWebsite } from "../publish/themes.js";
 import {
   approveDraft,
   listPendingDrafts,
@@ -122,11 +121,10 @@ api.put("/settings", handle(async (req) => {
   // repeatable while paused — that would silently resume research the operator
   // stopped. Resume re-registers with the current pattern when they unpause.
   if (changedCron && !config.researchPaused) await reRegisterResearchCron(config.researchCron);
-  // Topic filters drive the website's theme pages: sync them so adding/removing
-  // a filter makes the matching theme appear/disappear on the site immediately.
-  if (req.body && typeof req.body === "object" && "researchTopics" in req.body) {
-    void syncThemesToWebsite(config.researchTopics);
-  }
+  // The website's sections are the seven fixed content verticals, so they no
+  // longer change when a filter is edited — nothing to re-sync here. The set is
+  // pushed at startup (see app.ts / main.ts) and only changes with a code-level
+  // editorial revision of domain/verticals.ts.
   return config;
 }));
 
