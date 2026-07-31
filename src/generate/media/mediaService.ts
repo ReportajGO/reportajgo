@@ -1,7 +1,9 @@
+import type { NewsItem, PostDraft } from "@prisma/client";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { prisma } from "../../db/client.js";
 import { platformsWithoutRequiredMedia, profileFor } from "../../domain/platforms.js";
+import { tryWithLock } from "../../queue/lock.js";
 import type { AspectRatio, Platform } from "../../domain/types.js";
 import type { MediaResult } from "../../domain/types.js";
 import { imageHasText } from "../../research/gemini.js";
@@ -18,6 +20,16 @@ import { downloadImage, findArticleImageUrl } from "./sourceImage.js";
 import { safeFetch } from "../../util/ssrf.js";
 
 const log = logger.child({ module: "media" });
+
+type DraftWithNews = PostDraft & { newsItem: NewsItem };
+type DraftOutcome = "ready" | "failed" | "skipped";
+
+// Per-draft exclusivity for the whole of that draft's generation. Generous
+// enough to cover a slow image + optional video + the wordless retries, and
+// heartbeat-renewed by tryWithLock while the work is actually in flight — so the
+// TTL only matters if the process dies holding it.
+const DRAFT_CLAIM_PREFIX = "reportajgo:media:draft:";
+const DRAFT_CLAIM_TTL_MS = 10 * 60_000;
 
 // Pure-image rule appended for website visuals so any provider (incl. the
 // Gemini fallback) returns a clean photo with no rendered text or logos.
@@ -203,70 +215,115 @@ export async function generateMediaForPendingDrafts(opts?: {
   const provider = getMediaProvider();
   let ready = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const draft of drafts) {
-    const profile = profileFor(draft.platform as Platform);
-    // Website uses PURE images (real news photo or clean generated image, no
-    // overlay) at the platform's natural ratio. Other platforms use the branded
-    // card at the fixed card ratio (when enabled).
-    const isWebsite = draft.platform === "WEBSITE";
-    const ratio = (isWebsite || !env.BRAND_CARD_ENABLED
-      ? profile.media.aspectRatio
-      : env.BRAND_CARD_RATIO) as AspectRatio;
-    // Themed card headline (post language); fall back to the source title.
-    const headline = (draft.headline?.trim() || draft.newsItem.title.trim());
-
-    try {
-      const scene = await describeScene(draft.newsItem);
-
-      // Always produce a key image (also the still for video platforms).
-      const imagePrompt = composePrompt(scene, "IMAGE");
-      const image = await persistAsset(draft.id, "IMAGE", ratio, imagePrompt, provider.name, () =>
-        isWebsite
-          ? generateWebsiteImage(provider, draft.newsItem.sourceUrl, imagePrompt, ratio)
-          : generateBrandedImage(provider, draft.newsItem.sourceUrl, imagePrompt, ratio, headline),
-      );
-
-      if (profile.media.type === "VIDEO") {
-        if (image.status !== "READY" || !image.url) {
-          throw new Error("key image failed; cannot animate to video");
-        }
-        const videoPrompt = composePrompt(scene, "VIDEO");
-        await persistAsset(draft.id, "VIDEO", ratio, videoPrompt, provider.name, () =>
-          provider.generateVideo({
-            prompt: videoPrompt,
-            aspectRatio: ratio,
-            sourceImageUrl: image.url!,
-          }),
-        );
-      }
-
-      // persistAsset records a failed generation as a FAILED asset and returns
-      // normally, so an unchecked failure here would advance the draft to
-      // PENDING_APPROVAL with no usable media. For platforms that can't post
-      // without media that draft is unapprovable — fail it explicitly (the
-      // VIDEO branch above already does) so it surfaces instead of piling up.
-      if (image.status !== "READY" && profile.mediaRequired) {
-        throw new Error(`image generation failed and ${draft.platform} requires media`);
-      }
-
-      await prisma.postDraft.update({
-        where: { id: draft.id },
-        data: { status: "PENDING_APPROVAL" },
-      });
-      ready++;
-    } catch (err) {
-      log.error({ err, draftId: draft.id }, "media generation failed for draft");
-      await prisma.postDraft.update({
-        where: { id: draft.id },
-        data: { status: "FAILED" },
-      });
-      failed++;
+    // Claim the draft for the duration of ITS generation. The sweep-wide lock
+    // already serialises whole sweeps, but this is what actually makes double
+    // generation impossible: any other caller (a second sweep, the instant-post
+    // path, a manual retry script) finds the draft claimed and moves on instead
+    // of paying for the same image a second time.
+    const claim = await tryWithLock(`${DRAFT_CLAIM_PREFIX}${draft.id}`, DRAFT_CLAIM_TTL_MS, () =>
+      generateForDraft(draft, provider),
+    );
+    if (!claim.ran) {
+      log.info({ draftId: draft.id }, "draft already claimed by another media run; skipping");
+      skipped++;
+      continue;
     }
+    if (claim.result === "ready") ready++;
+    else if (claim.result === "failed") failed++;
+    else skipped++;
   }
 
-  log.info({ ready, failed }, "media generation complete");
+  log.info({ ready, failed, skipped }, "media generation complete");
   return { ready, failed };
+}
+
+/** One draft's media, start to finish. Runs under that draft's claim. */
+async function generateForDraft(
+  draft: DraftWithNews,
+  provider: ReturnType<typeof getMediaProvider>,
+): Promise<DraftOutcome> {
+  // Re-read under the claim: another run may have finished this draft while we
+  // were still working through the list we snapshotted at the top of the sweep.
+  const current = await prisma.postDraft.findUnique({
+    where: { id: draft.id },
+    select: { status: true },
+  });
+  if (current?.status !== "PENDING_MEDIA") return "skipped";
+
+  const profile = profileFor(draft.platform as Platform);
+  // Website uses PURE images (real news photo or clean generated image, no
+  // overlay) at the platform's natural ratio. Other platforms use the branded
+  // card at the fixed card ratio (when enabled).
+  const isWebsite = draft.platform === "WEBSITE";
+  const ratio = (isWebsite || !env.BRAND_CARD_ENABLED
+    ? profile.media.aspectRatio
+    : env.BRAND_CARD_RATIO) as AspectRatio;
+  // Themed card headline (post language); fall back to the source title.
+  const headline = (draft.headline?.trim() || draft.newsItem.title.trim());
+  const needsVideo = profile.media.type === "VIDEO";
+
+  // Second line of defence, and the one that survives a restart: usable media
+  // already on the draft means the work is done — advance, don't regenerate.
+  if (await hasUsableMedia(draft.id, needsVideo)) {
+    log.info({ draftId: draft.id }, "draft already has media; advancing without regenerating");
+    await prisma.postDraft.update({ where: { id: draft.id }, data: { status: "PENDING_APPROVAL" } });
+    return "ready";
+  }
+
+  try {
+    const scene = await describeScene(draft.newsItem);
+
+    // Always produce a key image (also the still for video platforms).
+    const imagePrompt = composePrompt(scene, "IMAGE");
+    const image = await persistAsset(draft.id, "IMAGE", ratio, imagePrompt, provider.name, () =>
+      isWebsite
+        ? generateWebsiteImage(provider, draft.newsItem.sourceUrl, imagePrompt, ratio)
+        : generateBrandedImage(provider, draft.newsItem.sourceUrl, imagePrompt, ratio, headline),
+    );
+
+    if (needsVideo) {
+      if (image.status !== "READY" || !image.url) {
+        throw new Error("key image failed; cannot animate to video");
+      }
+      const videoPrompt = composePrompt(scene, "VIDEO");
+      await persistAsset(draft.id, "VIDEO", ratio, videoPrompt, provider.name, () =>
+        provider.generateVideo({
+          prompt: videoPrompt,
+          aspectRatio: ratio,
+          sourceImageUrl: image.url!,
+        }),
+      );
+    }
+
+    // persistAsset records a failed generation as a FAILED asset and returns
+    // normally, so an unchecked failure here would advance the draft to
+    // PENDING_APPROVAL with no usable media. For platforms that can't post
+    // without media that draft is unapprovable — fail it explicitly (the
+    // VIDEO branch above already does) so it surfaces instead of piling up.
+    if (image.status !== "READY" && profile.mediaRequired) {
+      throw new Error(`image generation failed and ${draft.platform} requires media`);
+    }
+
+    await prisma.postDraft.update({ where: { id: draft.id }, data: { status: "PENDING_APPROVAL" } });
+    return "ready";
+  } catch (err) {
+    log.error({ err, draftId: draft.id }, "media generation failed for draft");
+    await prisma.postDraft.update({ where: { id: draft.id }, data: { status: "FAILED" } });
+    return "failed";
+  }
+}
+
+/** Does this draft already carry the media it needs (from an earlier run)? */
+async function hasUsableMedia(draftId: string, needsVideo: boolean): Promise<boolean> {
+  const assets = await prisma.mediaAsset.findMany({
+    where: { draftId, status: "READY", url: { not: null } },
+    select: { type: true },
+  });
+  const hasImage = assets.some((a) => a.type === "IMAGE");
+  return needsVideo ? hasImage && assets.some((a) => a.type === "VIDEO") : hasImage;
 }
 
 /** Create a QUEUED MediaAsset row, run the generator, then persist the result. */

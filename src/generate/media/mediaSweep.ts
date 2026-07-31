@@ -5,9 +5,12 @@ import { generateMediaForPendingDrafts } from "./mediaService.js";
 const log = logger.child({ module: "media-sweep" });
 
 const MEDIA_LOCK_KEY = "reportajgo:media:sweep";
-// Long enough to cover a full backlog pass (image gen is ~25s each); a crashed
-// holder frees the lock after this so the next tick can proceed.
-const MEDIA_LOCK_TTL_MS = 15 * 60_000;
+// Purely a CRASH timeout — tryWithLock heartbeats the key for as long as the
+// sweep is actually running, so the lock no longer has to out-guess how long a
+// backlog takes. (It used to: a 15-minute TTL against real generation times of
+// several minutes per image meant a 25-draft backlog lost the lock mid-pass and
+// the next 90-second tick started a second sweep over the same drafts.)
+const MEDIA_LOCK_TTL_MS = 5 * 60_000;
 
 /**
  * Generate media for ALL PENDING_MEDIA drafts, guarded by a Redis lock so the

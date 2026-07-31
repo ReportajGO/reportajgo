@@ -64,9 +64,17 @@ export async function publishScheduledPost(scheduledPostId: string): Promise<voi
   });
 
   try {
-    const media = sp.draft.media
-      .filter((m) => m.status === "READY" && m.url)
-      .map((m) => ({ type: m.type as MediaType, url: m.url! }));
+    // One asset per type, newest first. A draft can hold more than one READY
+    // asset (a retry after a failure, or a historic duplicate sweep); handing
+    // them all to the publisher would post the story as a multi-image carousel.
+    const newestPerType = new Map<string, { type: MediaType; url: string }>();
+    for (const m of [...sp.draft.media].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    )) {
+      if (m.status !== "READY" || !m.url || newestPerType.has(m.type)) continue;
+      newestPerType.set(m.type, { type: m.type as MediaType, url: m.url });
+    }
+    const media = [...newestPerType.values()];
 
     const publisher = getPublisher(platform);
     const result = await publisher.publish({

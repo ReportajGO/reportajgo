@@ -224,7 +224,11 @@ async function sweep(): Promise<void> {
       ...(!env.MEDIA_GENERATION_ENABLED ? { platform: { in: textOnlyPlatforms } } : {}),
     },
     include: {
-      media: { where: { status: "READY" }, select: { type: true, url: true } },
+      media: {
+        where: { status: "READY" },
+        select: { type: true, url: true },
+        orderBy: { createdAt: "desc" },
+      },
       newsItem: { select: { sourceName: true, sourceUrl: true, priority: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -248,12 +252,17 @@ async function sweep(): Promise<void> {
       siblings.find((d) => !profileFor(d.platform as Platform).mediaRequired) ??
       siblings[0]!;
 
-    // Every platform's READY media, de-duplicated by URL, for the album.
+    // ONE asset per platform per type for the album — the newest, since `media`
+    // comes back newest-first. A draft can carry more than one READY asset (an
+    // earlier duplicate sweep, a retry after a failure); showing all of them
+    // turned a 3-platform story into a 6-photo album.
     const seen = new Set<string>();
     const media: { type: string; url: string }[] = [];
     for (const d of siblings) {
+      const perType = new Set<string>();
       for (const m of d.media) {
-        if (seen.has(m.url)) continue;
+        if (perType.has(m.type) || seen.has(m.url)) continue;
+        perType.add(m.type);
         seen.add(m.url);
         media.push(m);
       }
@@ -535,7 +544,11 @@ export function startApprovalBot(): { stop: () => void } | undefined {
       const drafts = (await prisma.postDraft.findMany({
         where: { newsItemId, status: { in: ["PENDING_APPROVAL", "PENDING_MEDIA", "SCHEDULED"] } },
         include: {
-          media: { where: { status: "READY" }, select: { type: true, url: true } },
+          media: {
+            where: { status: "READY" },
+            select: { type: true, url: true },
+            orderBy: { createdAt: "desc" },
+          },
           newsItem: { select: { sourceName: true, sourceUrl: true } },
         },
         orderBy: { platform: "asc" },
