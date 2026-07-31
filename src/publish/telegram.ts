@@ -55,6 +55,22 @@ function channelLink(label: string, url?: string): string {
   return url ? `<a href="${escapeAttr(url)}">${label}</a>` : label;
 }
 
+/**
+ * A short, clickable stand-in for the article URL. Slugs are long enough to wrap
+ * over three lines in the channel, which buries the post; the site's own domain
+ * reads as a clean, branded link and carries the full URL in the href. Derived
+ * from the URL rather than hardcoded so it follows the domain if it ever moves.
+ */
+function articleLink(url: string): string {
+  let label = url;
+  try {
+    label = new URL(url).host.replace(/^www\./, "");
+  } catch {
+    // Not parseable — show the raw string rather than lose the link entirely.
+  }
+  return `<a href="${escapeAttr(url)}">${escapeHtml(label)}</a>`;
+}
+
 /** The "subscribe" row: Telegram | Instagram | YouTube. */
 function buildChannelLinks(): string {
   return [
@@ -70,7 +86,7 @@ function buildChannelLinks(): string {
  *   <b>Headline</b>
  *
  *   Batafsil 👇👇👇
- *   https://site/uz/article/…        ← the live website article link
+ *   reportajgo.uz                    ← clickable; href is the full article URL
  *
  *   Rasmiy sahifalarimizga obuna bo‘ling:
  *   Telegram | Instagram | YouTube
@@ -83,8 +99,8 @@ export function buildTelegramCaption(input: PublishInput, cap = CAPTION_CAP): st
   const parts: string[] = [];
 
   if (headline) parts.push(`<b>${escapeHtml(headline)}</b>`);
-  // "Batafsil 👇👇👇" + the raw article URL (Telegram auto-links it).
-  if (input.articleUrl) parts.push(`${DETAILS_LABEL}\n${input.articleUrl}`);
+  // "Batafsil 👇👇👇" + a short hyperlinked domain instead of the raw URL.
+  if (input.articleUrl) parts.push(`${DETAILS_LABEL}\n${articleLink(input.articleUrl)}`);
   parts.push(`${SUBSCRIBE_LABEL}\n${buildChannelLinks()}`);
 
   let caption = parts.join("\n\n");
