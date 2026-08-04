@@ -2,12 +2,14 @@ import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { mcpCallTool } from "../../integrations/higgsfield/mcpClient.js";
 import type { AspectRatio, MediaResult } from "../../domain/types.js";
+import { modelAspectRatio } from "./modelRatio.js";
 import type { ImageGenRequest, MediaProvider, VideoGenRequest } from "./provider.js";
 
 const log = logger.child({ module: "higgsfield-mcp-provider" });
 
-// "soul_2" hallucinates gibberish captions; "nano_banana_pro" obeys "no text".
-const IMAGE_MODEL = env.HIGGSFIELD_IMAGE_MODEL || "nano_banana_pro";
+// Higgsfield Soul 2.0 — editorial/realistic stills, 0.12 credits per 2k image,
+// billed to the subscription wallet the MCP OAuth session is attached to.
+const IMAGE_MODEL = env.HIGGSFIELD_IMAGE_MODEL || "soul_2";
 const MAX_POLLS = 20;
 const POLL_DELAY_MS = 3000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -45,8 +47,12 @@ export class HiggsfieldMcpProvider implements MediaProvider {
         params: {
           model: IMAGE_MODEL,
           prompt: `${req.prompt} ${NO_TEXT}`,
-          aspect_ratio: req.aspectRatio,
+          aspect_ratio: modelAspectRatio(IMAGE_MODEL, req.aspectRatio),
           count: 1,
+          // Pay from the credit wallet. Left unset, the server can answer with an
+          // `unlim_choice` question instead of a job — which has no operator to
+          // answer it here and would stall the pipeline.
+          use_unlim: false,
         },
       })) as GenSubmit;
 

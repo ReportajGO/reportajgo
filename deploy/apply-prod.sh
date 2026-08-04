@@ -104,7 +104,7 @@ RECREATE="backend-worker"
 if [ "$DO_HIGGSFIELD" = 1 ]; then
   upsert MEDIA_GENERATION_ENABLED true
   upsert IMAGE_PROVIDER higgsfield-mcp
-  upsert HIGGSFIELD_IMAGE_MODEL nano_banana_pro
+  upsert HIGGSFIELD_IMAGE_MODEL soul_2
   upsert BRAND_CARD_ENABLED true
   upsert BRAND_CARD_RATIO 1:1
   upsert CARD_RENDERER template

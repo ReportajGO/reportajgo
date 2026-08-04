@@ -85,9 +85,10 @@ const schema = z.object({
   // Aspect ratio for the branded card background generation.
   BRAND_CARD_RATIO: z.enum(["4:5", "1:1", "9:16", "16:9"]).default("4:5"),
 
-  // Higgsfield image model. "soul_2" (editorial) hallucinates fake/garbled text;
-  // "nano_banana_pro" follows the no-text instruction and gives clean photos.
-  HIGGSFIELD_IMAGE_MODEL: z.string().default("nano_banana_pro"),
+  // Higgsfield image model. "soul_2" is Soul 2.0 — the editorial/realistic look
+  // we want, 0.12 credits per 2k image. It does drift toward hallucinated signage,
+  // which the wordless-retry loop in mediaService catches and regenerates.
+  HIGGSFIELD_IMAGE_MODEL: z.string().default("soul_2"),
   // Higgsfield V2 SDK uses "KEY_ID:KEY_SECRET" credentials from cloud.higgsfield.ai.
   HIGGSFIELD_CREDENTIALS: z.string().optional(),
   // ElevenLabs, for the news presenter's cloned voice. The clone is private to
