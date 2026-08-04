@@ -2,7 +2,15 @@
 	email {$ACME_EMAIL}
 }
 
-{$DOMAIN}, www.{$DOMAIN} {
+# Both the legacy .uz and the new .com serve the same site. Which host is
+# canonical is advertised by the app through SITE_URL (canonical tags, OG
+# URLs, sitemap) rather than by a redirect here, so existing .uz links keep
+# resolving directly instead of bouncing.
+#
+# DOMAIN_ALT is defaulted in docker-compose.production.yml, never left unset:
+# an empty site address is a Caddyfile parse error, which would take the
+# whole site down rather than just the new domain.
+{$DOMAIN}, www.{$DOMAIN}, {$DOMAIN_ALT}, www.{$DOMAIN_ALT} {
 	encode zstd gzip
 
 	redir /agent /agent/ 308

@@ -188,6 +188,7 @@ services:
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:-reportajgo.uz}
+      DOMAIN_ALT: ${DOMAIN_ALT:-reportagego.com}
       ACME_EMAIL: ${ACME_EMAIL}
     ports:
       - "80:80"
