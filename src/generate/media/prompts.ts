@@ -21,6 +21,10 @@ export async function describeScene(news: NewsForVisual): Promise<string> {
     "- Do NOT name or depict real, identifiable people.",
     "- Describe a generic, symbolic, or location-based scene that evokes the topic.",
     "- Visual nouns only (place, objects, atmosphere, time of day). No opinions.",
+    "- The scene must be WORDLESS. Never include anything that would carry writing:",
+    "  no screens/monitors/phones showing text or code, no signs, banners, posters,",
+    "  newspapers, documents, whiteboards, labels, or branded packaging.",
+    "  Choose subjects with blank, unmarked surfaces instead.",
     "",
     `Title: ${news.title}`,
     `Summary: ${news.summary}`,
@@ -32,8 +36,13 @@ export async function describeScene(news: NewsForVisual): Promise<string> {
   return scene.replace(/\s+/g, " ").trim();
 }
 
-/** Compose the final generation prompt from a scene + brand style. */
+/**
+ * Compose the final generation prompt from a scene + brand style. The
+ * pure-image rule is part of every prompt, image and video alike: all
+ * ReportageGO wording is composited by our own card template afterwards, so a
+ * model that renders its own caption bar can only produce garbled pseudo-text.
+ */
 export function composePrompt(scene: string, type: MediaType): string {
   const style = type === "VIDEO" ? BRAND_STYLE.videoStyle : BRAND_STYLE.imageStyle;
-  return [scene, style, BRAND_STYLE.guardrails].join(" ");
+  return [scene, style, BRAND_STYLE.guardrails, BRAND_STYLE.pureImage].join(" ");
 }

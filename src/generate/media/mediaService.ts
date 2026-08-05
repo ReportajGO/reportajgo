@@ -10,6 +10,7 @@ import { imageHasText } from "../../research/gemini.js";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PURE_IMAGE_ESCALATION } from "./brandStyle.js";
 import { renderNewsCard } from "./card.js";
 import { renderTemplateCard } from "./templateCard.js";
 import { renderWithCanva } from "./canva/render.js";
@@ -31,11 +32,6 @@ type DraftOutcome = "ready" | "failed" | "skipped";
 const DRAFT_CLAIM_PREFIX = "reportajgo:media:draft:";
 const DRAFT_CLAIM_TTL_MS = 10 * 60_000;
 
-// Pure-image rule appended for website visuals so any provider (incl. the
-// Gemini fallback) returns a clean photo with no rendered text or logos.
-const PURE_IMAGE_RULE =
-  "No text, no words, no letters, no captions, no subtitles, no signage, no labels, " +
-  "no watermark, no logos anywhere in the image. Clean photographic image only.";
 
 /** Fetch an image URL (local or remote) into a Buffer for compositing. */
 async function fetchImageBytes(url: string): Promise<Buffer> {
@@ -70,16 +66,24 @@ async function wordlessBackground(
     }
   }
 
-  const purePrompt = `${prompt} ${PURE_IMAGE_RULE}`;
-  let img = await generatePure(provider, purePrompt, ratio);
-  for (let attempt = 2; attempt <= WORDLESS_ATTEMPTS; attempt++) {
-    if (img.status !== "READY" || !img.url) break;
-    if (!(await urlHasText(img.url))) break;
-    log.info({ attempt }, "image still had words; regenerating for a clean one");
-    img = await generatePure(provider, purePrompt, ratio);
+  // Each retry restates the no-text rule more forcefully and uses a fresh seed,
+  // so we aren't just re-rolling the same prompt and hoping.
+  for (let attempt = 0; attempt < WORDLESS_ATTEMPTS; attempt++) {
+    const escalation = PURE_IMAGE_ESCALATION[Math.min(attempt, PURE_IMAGE_ESCALATION.length - 1)]!;
+    const img = await generatePure(provider, `${prompt} ${escalation}`.trim(), ratio);
+    if (img.status !== "READY" || !img.url) continue;
+    if (await urlHasText(img.url)) {
+      log.warn({ attempt: attempt + 1 }, "generated image still had words; regenerating");
+      continue;
+    }
+    return { bytes: await fetchImageBytes(img.url), mime: "image/png", provider: img.provider };
   }
-  if (img.status !== "READY" || !img.url) return null;
-  return { bytes: await fetchImageBytes(img.url), mime: "image/png", provider: img.provider };
+
+  // Never ship a text-bearing image: the only words on a ReportageGO post come
+  // from our own card template. Failing here surfaces the draft as FAILED
+  // instead of publishing a visual with garbled pseudo-text baked in.
+  log.error({ attempts: WORDLESS_ATTEMPTS }, "no wordless image after all attempts; giving up");
+  return null;
 }
 
 /** Website visual policy: a clean, wordless photo with NO logo/headline overlay. */
@@ -98,8 +102,11 @@ export async function generateWebsiteImage(
 }
 
 const IMAGE_GEN_ATTEMPTS = 3;
-// How many times to regenerate a website image while words are still detected.
+// How many times to regenerate an image while words are still detected on it.
 const WORDLESS_ATTEMPTS = 3;
+
+/** A fresh seed per attempt, so a retry actually re-rolls the composition. */
+const randomSeed = () => Math.floor(Math.random() * 1_000_000_000);
 
 /** Generate an image with Higgsfield, retrying transient failures. No Gemini. */
 async function generatePure(
@@ -107,10 +114,11 @@ async function generatePure(
   prompt: string,
   ratio: AspectRatio,
 ): Promise<MediaResult> {
-  let img = await provider.generateImage({ prompt, aspectRatio: ratio });
+  const req = { prompt, aspectRatio: ratio };
+  let img = await provider.generateImage({ ...req, seed: randomSeed() });
   for (let attempt = 2; attempt <= IMAGE_GEN_ATTEMPTS && img.status !== "READY"; attempt++) {
     log.warn({ provider: provider.name, err: img.error, attempt }, "Higgsfield image failed; retrying");
-    img = await provider.generateImage({ prompt, aspectRatio: ratio });
+    img = await provider.generateImage({ ...req, seed: randomSeed() });
   }
   return img;
 }

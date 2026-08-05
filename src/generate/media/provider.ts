@@ -3,7 +3,6 @@ import type { AspectRatio, MediaResult } from "../../domain/types.js";
 export interface ImageGenRequest {
   prompt: string;
   aspectRatio: AspectRatio;
-  negativePrompt?: string;
   seed?: number;
 }
 

@@ -14,11 +14,6 @@ const MAX_POLLS = 20;
 const POLL_DELAY_MS = 3000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Soul tends to hallucinate captions/signage. Strongly forbid any rendered text
-// since the headline is composited separately.
-const NO_TEXT =
-  "Absolutely no text, no letters, no words, no captions, no subtitles, no signage, " +
-  "no labels, no watermark, no logos anywhere in the image. Clean photographic scene only.";
 
 interface GenSubmit {
   results?: { id?: string }[];
@@ -46,7 +41,9 @@ export class HiggsfieldMcpProvider implements MediaProvider {
       const submit = (await mcpCallTool("generate_image", {
         params: {
           model: IMAGE_MODEL,
-          prompt: `${req.prompt} ${NO_TEXT}`,
+          // Soul takes no negative-prompt input, so the "no rendered text" rule
+          // is baked into req.prompt by composePrompt instead.
+          prompt: req.prompt,
           aspect_ratio: modelAspectRatio(IMAGE_MODEL, req.aspectRatio),
           count: 1,
           // Pay from the credit wallet. Left unset, the server can answer with an
