@@ -50,6 +50,7 @@ const I18N = {
     sub_awaitingMedia: "awaiting media", sub_queuedToPublish: "queued to publish",
     sub_newsSeen: "news items seen", q_active: "active", q_wait: "wait", q_failed: "failed",
     cron_on: "auto", cron_paused: "auto-research paused", conf_yes: "configured", conf_no: "not set",
+    integ_images: "Images", mediaFailed: "Image failed", mediaWorking: "Generating image…", mediaNone: "No image",
     postCopy: "Post copy", hashtags: "Hashtags (comma-separated)", scheduleLocal: "Schedule (local time)",
     approve: "✓ Approve & schedule", reject: "Reject", linkWord: "link", sourceWord: "source",
     scheduledAt: "Scheduled:", publishedAt: "Published:", postId: "Post id:", reason: "Reason:", errorWord: "Error:",
@@ -101,6 +102,7 @@ const I18N = {
     sub_awaitingMedia: "media kutilmoqda", sub_queuedToPublish: "e’longa navbatda",
     sub_newsSeen: "ko‘rilgan yangiliklar", q_active: "faol", q_wait: "kutilmoqda", q_failed: "xato",
     cron_on: "avto", cron_paused: "avto-izlanish to‘xtatilgan", conf_yes: "sozlangan", conf_no: "yo‘q",
+    integ_images: "Rasmlar", mediaFailed: "Rasm yaratilmadi", mediaWorking: "Rasm yaratilmoqda…", mediaNone: "Rasm yo‘q",
     postCopy: "Post matni", hashtags: "Heshteglar (vergul bilan)", scheduleLocal: "Reja (mahalliy vaqt)",
     approve: "✓ Tasdiqlash va rejaga olish", reject: "Rad etish", linkWord: "havola", sourceWord: "manba",
     scheduledAt: "Rejada:", publishedAt: "E’lon qilingan:", postId: "Post id:", reason: "Sabab:", errorWord: "Xato:",
@@ -152,6 +154,7 @@ const I18N = {
     sub_awaitingMedia: "ждут медиа", sub_queuedToPublish: "в очереди на публикацию",
     sub_newsSeen: "просмотрено новостей", q_active: "активно", q_wait: "ожидание", q_failed: "ошибки",
     cron_on: "авто", cron_paused: "авто-поиск остановлен", conf_yes: "настроено", conf_no: "не задано",
+    integ_images: "Картинки", mediaFailed: "Картинка не создана", mediaWorking: "Картинка создаётся…", mediaNone: "Нет картинки",
     postCopy: "Текст поста", hashtags: "Хэштеги (через запятую)", scheduleLocal: "Время (локальное)",
     approve: "✓ Одобрить и запланировать", reject: "Отклонить", linkWord: "ссылка", sourceWord: "источник",
     scheduledAt: "Запланировано:", publishedAt: "Опубликовано:", postId: "ID поста:", reason: "Причина:", errorWord: "Ошибка:",
@@ -308,11 +311,21 @@ function renderStats(s) {
 }
 
 function renderIntegrations(integ) {
-  const map = { gemini: "Gemini", telegram: "Telegram", meta: "Meta (IG/FB)", higgsfield: "Higgsfield" };
+  const map = {
+    gemini: "Gemini",
+    images: t("integ_images"),
+    telegram: "Telegram",
+    meta: "Meta (IG/FB)",
+    higgsfield: "Higgsfield",
+  };
   el("integrations").innerHTML = Object.entries(map)
     .map(([k, label]) => {
       const ok = integ?.[k]?.configured;
-      return `<span class="pill"><b>${label}</b> <span class="${ok ? "s-ok" : "s-no"}">${ok ? "✓ " + t("conf_yes") : "✗ " + t("conf_no")}</span></span>`;
+      // `detail` (image generation) names the provider, or says what's missing —
+      // the answer to "why do my posts have no picture", shown on hover.
+      const detail = integ?.[k]?.detail;
+      const title = detail ? ` title="${esc(detail)}"` : "";
+      return `<span class="pill"${title}><b>${esc(label)}</b> <span class="${ok ? "s-ok" : "s-no"}">${ok ? "✓ " + t("conf_yes") : "✗ " + t("conf_no")}</span></span>`;
     })
     .join("");
 }
@@ -446,9 +459,17 @@ async function saveSettings(btn) {
 }
 
 // ── content lifecycle ────────────────────────────────────
-function mediaEl(media) {
+function mediaEl(media, issue) {
   const m = (media || [])[0];
-  if (!m) return '<div class="nomedia">—</div>';
+  if (!m) {
+    // No usable asset. Say why instead of a bare dash: a failed image used to
+    // look identical to one that simply hadn't been generated yet.
+    if (issue?.status === "FAILED") {
+      return `<div class="nomedia failed"><b>${t("mediaFailed")}</b><span>${esc(issue.error || "")}</span></div>`;
+    }
+    if (issue) return `<div class="nomedia">${t("mediaWorking")}</div>`;
+    return `<div class="nomedia">${t("mediaNone")}</div>`;
+  }
   const src = mediaUrl(m.url);
   if (m.type === "VIDEO") return `<video src="${esc(src)}" controls muted loop></video>`;
   return `<img src="${esc(src)}" alt="generated visual" class="zoomable" title="${t("zoomHint")}" />`;
@@ -613,7 +634,7 @@ function pendingCard(d) {
   const node = document.createElement("article");
   node.className = "card";
   node.innerHTML = `
-    <div class="media">${mediaEl(d.media)}</div>
+    <div class="media">${mediaEl(d.media, d.mediaIssue)}</div>
     <div class="body">
       <div class="meta">
         <span class="badge-plat">${esc(d.platform)}</span>
@@ -734,7 +755,7 @@ function readonlyCard(d) {
   const actionsHtml = acts.length ? `<div class="actions card-acts">${acts.join("")}</div>` : "";
 
   node.innerHTML = `
-    <div class="media">${mediaEl(d.media)}</div>
+    <div class="media">${mediaEl(d.media, d.mediaIssue)}</div>
     <div class="body">
       <div class="meta">
         <span class="badge-plat">${esc(d.platform)}</span>

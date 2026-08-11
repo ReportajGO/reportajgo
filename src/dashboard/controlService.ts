@@ -6,10 +6,12 @@ import { profileFor } from "../domain/platforms.js";
 import { describe as describeQuota } from "../domain/quota.js";
 import type { Platform } from "../domain/types.js";
 import { mixReport } from "../domain/verticals.js";
+import { hasRefreshToken } from "../integrations/higgsfield/oauth.js";
 import { getEditorialStateSafe } from "../strategy/editorialState.js";
 import { pipelineQueue, publishQueue, schedulerQueue } from "../queue/queues.js";
 import { isResearchCronActive } from "../queue/schedule.js";
 import { approveDraft } from "./approvalService.js";
+import { MEDIA_FOR_REVIEW, withMediaState } from "./mediaState.js";
 import type { Queue } from "bullmq";
 
 const log = logger.child({ module: "control" });
@@ -91,8 +93,41 @@ export async function getHealth() {
   };
 }
 
+/**
+ * Whether the configured image provider can actually be called, and a short
+ * human-readable reason when it can't. This is what decides whether a post gets
+ * a picture — the old `higgsfield` flag only checked HIGGSFIELD_CREDENTIALS,
+ * which the default `higgsfield-mcp` provider does not use, so a working setup
+ * reported "not set" and a broken one (no OAuth token, generation switched off)
+ * reported nothing at all.
+ */
+function imageGeneration(): { configured: boolean; detail: string } {
+  if (!env.MEDIA_GENERATION_ENABLED) {
+    return { configured: false, detail: "MEDIA_GENERATION_ENABLED=false — posts are text-only" };
+  }
+  const provider = env.IMAGE_PROVIDER;
+  if (provider === "higgsfield-mcp") {
+    return hasRefreshToken()
+      ? { configured: true, detail: "higgsfield-mcp" }
+      : {
+          configured: false,
+          detail: "higgsfield-mcp: no OAuth token — run `npm run higgsfield:login` and mount .secrets",
+        };
+  }
+  if (provider === "higgsfield") {
+    return env.HIGGSFIELD_CREDENTIALS?.includes(":")
+      ? { configured: true, detail: "higgsfield (REST)" }
+      : { configured: false, detail: "higgsfield: HIGGSFIELD_CREDENTIALS missing (KEY_ID:KEY_SECRET)" };
+  }
+  return { configured: env.geminiKeys.length > 0, detail: "gemini" };
+}
+
 function integrations() {
+  const images = imageGeneration();
   return {
+    // Surfaced next to the other health chips: no picture on a post is almost
+    // always this being red.
+    images: { ...images, editable: false },
     gemini: { configured: Boolean(env.GEMINI_API_KEY), editable: false },
     telegram: {
       // The channel publisher reuses the approval-bot token when no dedicated
@@ -292,10 +327,12 @@ type LifecycleStatus = "PENDING_APPROVAL" | "SCHEDULED" | "PUBLISHED" | "REJECTE
 
 /** Post drafts in a given lifecycle state, with media + source + schedule. */
 export async function listPostsByStatus(status: LifecycleStatus) {
-  return prisma.postDraft.findMany({
+  const drafts = await prisma.postDraft.findMany({
     where: { status },
     include: {
-      media: { where: { status: "READY" }, select: { type: true, url: true, aspectRatio: true } },
+      // Every asset, not just the READY ones: the Failed tab is exactly where an
+      // operator needs to read the provider's error (see withMediaState).
+      media: { ...MEDIA_FOR_REVIEW, orderBy: { createdAt: "desc" } },
       newsItem: {
         select: {
           title: true,
@@ -318,4 +355,5 @@ export async function listPostsByStatus(status: LifecycleStatus) {
     orderBy: { updatedAt: "desc" },
     take: 100,
   });
+  return drafts.map(withMediaState);
 }

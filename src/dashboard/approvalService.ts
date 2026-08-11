@@ -3,6 +3,7 @@ import { logger } from "../config/logger.js";
 import { prisma } from "../db/client.js";
 import { profileFor } from "../domain/platforms.js";
 import type { Platform } from "../domain/types.js";
+import { MEDIA_FOR_REVIEW, withMediaState } from "./mediaState.js";
 
 const log = logger.child({ module: "approval" });
 
@@ -31,16 +32,21 @@ async function nextScheduleSlot(): Promise<Date> {
   return new Date(base);
 }
 
-/** Drafts awaiting human review, with their media + source news. */
+/**
+ * Drafts awaiting human review, with their media + source news. Assets are
+ * fetched whatever their status so a draft with no usable image can say why
+ * (`mediaIssue`); `media` itself still carries only the READY ones.
+ */
 export async function listPendingDrafts() {
-  return prisma.postDraft.findMany({
+  const drafts = await prisma.postDraft.findMany({
     where: { status: "PENDING_APPROVAL" },
     include: {
-      media: { where: { status: "READY" }, select: { type: true, url: true, aspectRatio: true } },
+      media: { ...MEDIA_FOR_REVIEW, orderBy: { createdAt: "desc" } },
       newsItem: { select: { title: true, sourceName: true, sourceUrl: true, topic: true } },
     },
     orderBy: { createdAt: "asc" },
   });
+  return drafts.map(withMediaState);
 }
 
 export interface ApproveInput {

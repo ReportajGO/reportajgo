@@ -259,6 +259,12 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); bo
 .media img, .media video { width: 100%; height: 100%; max-height: 460px; object-fit: contain; display: block; }
 .media img.zoomable { cursor: zoom-in; }
 .media .nomedia { color: var(--faint); font-size: 0.84rem; padding: 26px; text-align: center; }
+/* Why there is no picture — the provider's own error, so it can be long. */
+.media .nomedia.failed { display: grid; gap: 6px; color: var(--danger, #e11414); }
+.media .nomedia.failed span {
+  color: var(--faint); font-size: 0.78rem; line-height: 1.35;
+  overflow-wrap: anywhere; max-height: 8.4em; overflow: hidden;
+}
 
 /* ── Lightbox (full-size image viewer) ────────────────── */
 .lightbox {
