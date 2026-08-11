@@ -116,15 +116,31 @@ export async function generateJson<T>(prompt: string, temperature = 0.2): Promis
 }
 
 /**
- * Vision check: does the image have prominent rendered text (words, captions,
- * subtitles, signage, watermarks, text logos) overlaid on it? Used to reject
- * source photos that carry words. Returns false on any error (fail-open).
+ * Vision check: is this image spoiled by rendered text?
+ *
+ * What we are actually guarding against is a visual that looks *designed* —
+ * a caption bar, a watermark, a title card — or one carrying the garbled
+ * pseudo-lettering image models invent. Incidental real-world text is NOT that:
+ * a documentary photograph of a street, an office or a conference almost always
+ * has a sign somewhere in it, and the earlier wording ("any prominent, legible
+ * text … signage") made the model answer YES to nearly every usable news photo,
+ * so ~85% of drafts were regenerated three times and then failed outright.
+ *
+ * Returns false on any error (fail-open).
  */
 export async function imageHasText(base64Data: string, mimeType: string): Promise<boolean> {
-  const prompt =
-    "Look at this image. Does it contain any prominent, legible TEXT visible on it — " +
-    "words, letters, captions, subtitles, headlines, signage, watermarks, or text-based logos? " +
-    "Ignore tiny/blurry incidental background text. Answer with ONLY one word: YES or NO.";
+  const prompt = [
+    "This image must look like a bare photograph, with no graphic design applied to it.",
+    "Answer YES if ANY of these is true:",
+    "- a caption bar, lower third, chyron, news ticker, subtitle, title card or watermark is drawn over the photo;",
+    "- it carries a logo or a wordmark;",
+    "- large lettering is a main subject of the frame (a headline, a poster or a banner filling much of it);",
+    "- any visible lettering is garbled, misspelled or nonsensical.",
+    "Answer NO if the only text is small, incidental and naturally part of the scene —",
+    "a distant street sign, a label on equipment, a shopfront in the background.",
+    "That is normal in a real photograph and is not a defect.",
+    "Answer with ONLY one word: YES or NO.",
+  ].join("\n");
   const response = await callModel({
     model: await model(),
     contents: [{ parts: [{ inlineData: { mimeType, data: base64Data } }, { text: prompt }] }],

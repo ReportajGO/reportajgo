@@ -33,12 +33,16 @@ const DRAFT_CLAIM_PREFIX = "reportajgo:media:draft:";
 const DRAFT_CLAIM_TTL_MS = 10 * 60_000;
 
 
-/** Fetch an image URL (local or remote) into a Buffer for compositing. */
-async function fetchImageBytes(url: string): Promise<Buffer> {
+/** Fetch an image URL (local or remote) into bytes + its real content type. */
+async function fetchImage(url: string): Promise<{ bytes: Buffer; mime: string }> {
   // SSRF-safe: rejects internal/loopback targets and re-checks redirects.
   const res = await safeFetch(url);
   if (!res.ok) throw new Error(`failed to fetch background image: HTTP ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+  const declared = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
+  return {
+    bytes: Buffer.from(await res.arrayBuffer()),
+    mime: declared.startsWith("image/") ? declared : "image/png",
+  };
 }
 
 /**
@@ -68,21 +72,35 @@ async function wordlessBackground(
 
   // Each retry restates the no-text rule more forcefully and uses a fresh seed,
   // so we aren't just re-rolling the same prompt and hoping.
+  let candidate: { bytes: Buffer; mime: string; provider: string } | null = null;
   for (let attempt = 0; attempt < WORDLESS_ATTEMPTS; attempt++) {
     const escalation = PURE_IMAGE_ESCALATION[Math.min(attempt, PURE_IMAGE_ESCALATION.length - 1)]!;
     const img = await generatePure(provider, `${prompt} ${escalation}`.trim(), ratio);
     if (img.status !== "READY" || !img.url) continue;
-    if (await urlHasText(img.url)) {
-      log.warn({ attempt: attempt + 1 }, "generated image still had words; regenerating");
-      continue;
-    }
-    return { bytes: await fetchImageBytes(img.url), mime: "image/png", provider: img.provider };
+    // Fetch once and check those same bytes — the old path downloaded the image
+    // twice, once to inspect and once to keep.
+    const fetched = await fetchImage(img.url);
+    const photo = { ...fetched, provider: img.provider };
+    if (!(await hasText(photo.bytes, photo.mime))) return photo;
+    log.warn({ attempt: attempt + 1 }, "generated image still had words; regenerating");
+    candidate ??= photo;
   }
 
-  // Never ship a text-bearing image: the only words on a ReportageGO post come
-  // from our own card template. Failing here surfaces the draft as FAILED
-  // instead of publishing a visual with garbled pseudo-text baked in.
-  log.error({ attempts: WORDLESS_ATTEMPTS }, "no wordless image after all attempts; giving up");
+  // Every attempt tripped the text detector. It is a useful filter but not a
+  // reliable judge — it flags an ordinary street sign in a documentary photo —
+  // so treating its verdict as fatal meant most stories were published with no
+  // picture at all. Keep the first candidate and say so in the log; the prompt
+  // itself already forbids captions, watermarks and broadcast graphics, and the
+  // headline is composited by our own card template afterwards.
+  if (candidate) {
+    log.warn(
+      { attempts: WORDLESS_ATTEMPTS, provider: candidate.provider },
+      "no provably wordless image; using the best candidate rather than failing the draft",
+    );
+    return candidate;
+  }
+
+  log.error({ attempts: WORDLESS_ATTEMPTS }, "image generation produced nothing usable; giving up");
   return null;
 }
 
@@ -126,19 +144,6 @@ async function generatePure(
 /** Text-detection on raw bytes; never throws (fail-open = treat as no text). */
 async function hasText(bytes: Buffer, mime: string): Promise<boolean> {
   try {
-    return await imageHasText(bytes.toString("base64"), mime);
-  } catch {
-    return false;
-  }
-}
-
-/** Text-detection on an image URL; never throws. */
-async function urlHasText(url: string): Promise<boolean> {
-  try {
-    const bytes = await fetchImageBytes(url);
-    const mime = url.toLowerCase().endsWith(".jpg") || url.toLowerCase().endsWith(".jpeg")
-      ? "image/jpeg"
-      : "image/png";
     return await imageHasText(bytes.toString("base64"), mime);
   } catch {
     return false;
