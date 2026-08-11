@@ -11,6 +11,7 @@
     "postinstall": "prisma generate",
     "admin:ensure": "node scripts/ensure-admin.cjs",
     "slug:backfill": "tsx prisma/backfill-slugs.ts",
+    "covers:repair": "node scripts/rehost-images.mjs",
     "test": "node --import tsx --test src/lib/slug.test.ts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",

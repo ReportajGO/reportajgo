@@ -4,8 +4,28 @@ import { checkApiKey } from "@/lib/agentAuth";
 import { isCategory } from "@/lib/constants";
 import { locales } from "@/i18n/routing";
 import { translateAll } from "@/lib/translate";
-import { saveImageFromUrl } from "@/lib/upload";
+import { saveImageFromUrl, UnreachableImageError } from "@/lib/upload";
 import { createPostWithUniqueSlug } from "@/lib/postSlug";
+
+/**
+ * Is this a URL a reader's browser could actually load as a cover? Re-hosting is
+ * the happy path; this decides whether the ORIGINAL URL is worth keeping when
+ * re-hosting fails. The page CSP allows img-src 'self' data: https:, so a plain
+ * http:// or localhost/container URL renders as a broken image for everyone —
+ * storing null instead lets <Cover> fall back to the branded gradient tile.
+ */
+function loadableByReaders(url: string, err: unknown): boolean {
+  // We just proved nothing is served there, so no reader will load it either.
+  if (err instanceof UnreachableImageError) return false;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    return host !== "localhost" && !host.endsWith(".localhost") && host.includes(".");
+  } catch {
+    return false;
+  }
+}
 
 /** Public reader URL for a post, preferring its pretty slug over the raw id. */
 function articleUrl(post: { language: string; slug: string | null; id: string }): string {
@@ -109,11 +129,14 @@ export async function POST(req: Request) {
     const existing = await prisma.post.findUnique({ where: { dedupeKey } });
     if (!existing)
       return NextResponse.json({ error: "no post for dedupeKey" }, { status: 404 });
-    let local = imageUrl as string;
+    let local: string | null;
     try {
       local = await saveImageFromUrl(imageUrl);
     } catch (err) {
-      console.error("[agent] refresh re-host failed:", err);
+      // Same rule as the create path: never swap a working cover for one that
+      // can't load. Keep the existing image when the new URL is unusable.
+      local = loadableByReaders(imageUrl, err) ? (imageUrl as string) : existing.imageUrl;
+      console.error("[agent] refresh re-host failed; keeping", local ?? "no cover", err);
     }
     const updated = await prisma.post.update({ where: { id: existing.id }, data: { imageUrl: local } });
     return NextResponse.json({ refreshed: true, post: { id: updated.id, imageUrl: updated.imageUrl } });
@@ -149,12 +172,17 @@ export async function POST(req: Request) {
   if (typeof imageUrl === "string" && imageUrl.trim()) {
     // Re-host the agent's image locally so it's served same-origin (the agent
     // serves media on another host/port over http, which the site CSP blocks).
-    // Falls back to the original URL if the download fails.
-    localImageUrl = imageUrl;
     try {
       localImageUrl = await saveImageFromUrl(imageUrl);
     } catch (err) {
-      console.error("[agent] image re-host failed; using remote URL:", err);
+      // Only keep the original URL when a browser could load it. The old
+      // unconditional fallback is what put unreachable http://localhost:3010/media/…
+      // URLs on live articles, so every one of them showed a broken cover.
+      localImageUrl = loadableByReaders(imageUrl, err) ? imageUrl : null;
+      console.error(
+        `[agent] image re-host failed; cover ${localImageUrl ? "falls back to the remote URL" : "dropped (unloadable URL)"}:`,
+        err,
+      );
     }
   }
 

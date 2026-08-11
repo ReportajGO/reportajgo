@@ -2,6 +2,7 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { themeSlug } from "../domain/themes.js";
 import type { Platform } from "../domain/types.js";
+import { isPubliclyFetchableUrl } from "../util/ssrf.js";
 import type { Publisher, PublishInput, PublishResult } from "./publisher.js";
 
 const log = logger.child({ module: "publish:website" });
@@ -26,6 +27,29 @@ function absoluteUrl(url: string): string {
   if (/^https?:\/\//i.test(url)) return url;
   const base = env.PUBLIC_BASE_URL.replace(/\/+$/, "");
   return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+/**
+ * The cover URL to hand the site — or nothing at all.
+ *
+ * The site re-hosts the cover by FETCHING this URL from its own container, and
+ * if that fetch fails it keeps the URL and serves it to readers. So a URL only
+ * this process can reach — which is what PUBLIC_BASE_URL degrades to when it is
+ * left unset under MEDIA_STORAGE_DRIVER=local: http://localhost:3010/media/… —
+ * becomes a broken cover on every article. Dropping it instead lets the site
+ * render its branded gradient placeholder, and the log line says how to fix the
+ * configuration rather than leaving a silently broken site.
+ */
+function publishableCoverUrl(url: string): string | undefined {
+  const abs = absoluteUrl(url);
+  if (isPubliclyFetchableUrl(abs)) return abs;
+  log.error(
+    { url: abs },
+    "media URL is not reachable from outside this host — publishing the article without a cover. " +
+      "Set PUBLIC_BASE_URL to the public origin that serves /media (e.g. https://<domain>/agent), " +
+      "or switch MEDIA_STORAGE_DRIVER=s3.",
+  );
+  return undefined;
 }
 
 interface IngestResponse {
@@ -55,13 +79,14 @@ export class WebsitePublisher implements Publisher {
     const a = input.article;
     if (!a) throw new Error("WEBSITE publish requires article metadata");
     const image = input.media.find((m) => m.type === "IMAGE" && m.url);
+    const coverUrl = image?.url ? publishableCoverUrl(image.url) : undefined;
     const payload = {
       title: a.title,
       excerpt: a.excerpt,
       content: input.body,
       category: articleTheme(a.topic),
       language: mapLanguage(a.language),
-      ...(image?.url ? { imageUrl: absoluteUrl(image.url) } : {}),
+      ...(coverUrl ? { imageUrl: coverUrl } : {}),
       source: a.source,
       sourceUrl: a.sourceUrl,
       dedupeKey: a.dedupeKey,

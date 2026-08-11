@@ -15,6 +15,7 @@ import { HiggsfieldClient, InputImage, InputAudio, SpeakVideoQuality, SpeakDurat
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import type { MediaResult } from "../../domain/types.js";
+import { isPubliclyFetchableUrl } from "../../util/ssrf.js";
 import { synthesizeSpeech } from "./elevenlabs.js";
 import { saveAudio } from "./mediaStore.js";
 
@@ -59,21 +60,12 @@ export interface AnchorVideoResult extends MediaResult {
  * Fail before spending credits instead.
  */
 function assertPubliclyFetchable(url: string, label: string): void {
-  let host: string;
-  try {
-    host = new URL(url).hostname;
-  } catch {
-    throw new Error(`${label} is not a valid URL: ${url}`);
-  }
-  const isLocal =
-    host === "localhost" || host === "::1" || /^127\./.test(host) || /^(10|192\.168)\./.test(host);
-  if (isLocal) {
-    throw new Error(
-      `${label} points at ${host}, which Higgsfield cannot reach (${url}). Set PUBLIC_BASE_URL ` +
-        "to your public domain, or switch MEDIA_STORAGE_DRIVER=s3, so the presenter's photo and " +
-        "voice are fetchable from the internet.",
-    );
-  }
+  if (isPubliclyFetchableUrl(url)) return;
+  throw new Error(
+    `${label} is not reachable from the internet (${url}), so Higgsfield cannot fetch it. ` +
+      "Set PUBLIC_BASE_URL to your public domain, or switch MEDIA_STORAGE_DRIVER=s3, so the " +
+      "presenter's photo and voice are fetchable from the internet.",
+  );
 }
 
 /** Smallest fixed clip length that fits the narration. */

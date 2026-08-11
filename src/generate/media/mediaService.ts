@@ -353,7 +353,21 @@ async function persistAsset(
     data: { draftId, type, provider: providerName, aspectRatio, prompt, status: "GENERATING" },
   });
 
-  const result = await generate();
+  let result: Awaited<ReturnType<typeof generate>>;
+  try {
+    result = await generate();
+  } catch (err) {
+    // The generator can throw as well as return a FAILED result — a network
+    // error fetching the finished image, the SSRF guard, the provider SDK. That
+    // used to leave the row in GENERATING forever, which reads as "still
+    // working" to every retry path and hides the real error. Record it, then
+    // rethrow so the draft is failed by the caller as before.
+    await prisma.mediaAsset.update({
+      where: { id: asset.id },
+      data: { status: "FAILED", error: err instanceof Error ? err.message : String(err) },
+    });
+    throw err;
+  }
 
   await prisma.mediaAsset.update({
     where: { id: asset.id },

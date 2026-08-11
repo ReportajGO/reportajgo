@@ -53,6 +53,34 @@ export async function assertPublicUrl(raw: string): Promise<URL> {
   return u;
 }
 
+/**
+ * The mirror image of assertPublicUrl, for URLs we MINT rather than receive:
+ * could something outside this host — the website re-hosting a cover, Telegram,
+ * Higgsfield — actually fetch this? Synchronous and DNS-free, so it can gate a
+ * URL before we hand it out.
+ *
+ * Rejects non-http(s), localhost, private/link-local literals, and bare
+ * single-label hostnames (`http://backend-app:3010`), which only resolve inside
+ * the compose network. Those are exactly what PUBLIC_BASE_URL degrades to when
+ * it is left unset, and a cover built from one loads for nobody.
+ */
+export function isPubliclyFetchableUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+  // URL keeps IPv6 hosts in brackets; strip them for the IP checks.
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!host) return false;
+  if (host === "localhost" || host.endsWith(".localhost")) return false;
+  if (net.isIP(host)) return !isPrivateIp(host);
+  // A dotless name is a container/LAN name, not a public domain.
+  return host.includes(".");
+}
+
 const MAX_REDIRECTS = 4;
 
 /**

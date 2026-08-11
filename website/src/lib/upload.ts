@@ -19,6 +19,15 @@ const EXT_BY_MIME: Record<string, string> = {
 
 export class UploadError extends Error {}
 
+/**
+ * The image could not be retrieved at all — blocked target, DNS failure,
+ * timeout, or an HTTP error such as a private S3 object answering 403. Callers
+ * use this to tell "we couldn't store it, but the URL is fine" apart from "that
+ * URL serves nothing", because keeping the latter as a cover shows every reader
+ * a broken image.
+ */
+export class UnreachableImageError extends UploadError {}
+
 function shouldUseS3Storage(): boolean {
   return (process.env.UPLOAD_STORAGE_DRIVER || "local") === "s3";
 }
@@ -100,9 +109,9 @@ export async function saveImageFromUrl(url: string): Promise<string> {
   try {
     res = await safeFetch(url, {}, 25_000);
   } catch (e) {
-    throw new UploadError(`refused image URL: ${e instanceof Error ? e.message : "blocked"}`);
+    throw new UnreachableImageError(`refused image URL: ${e instanceof Error ? e.message : "blocked"}`);
   }
-  if (!res.ok) throw new UploadError(`fetch image failed: HTTP ${res.status}`);
+  if (!res.ok) throw new UnreachableImageError(`fetch image failed: HTTP ${res.status}`);
   const buffer = Buffer.from(await res.arrayBuffer());
   if (buffer.length === 0) throw new UploadError("Empty image");
   if (buffer.length > MAX_URL_BYTES) throw new UploadError("Image too large");

@@ -61,6 +61,14 @@ services:
       REDIS_URL: redis://redis:6379
       DASHBOARD_BIND: 0.0.0.0
       WEBSITE_API_URL: http://frontend:3000
+      # Public origin the agent's own media is served from. Caddy maps
+      # /agent/* -> this container, which serves generated files at /media, so
+      # /agent/media/<file> is the public address of every locally-stored image.
+      # It MUST be public: the website fetches this URL to re-host each article
+      # cover, and the default (http://localhost:3010) is reachable from nothing
+      # but this container — which is why covers came out broken. Unused when
+      # MEDIA_STORAGE_DRIVER=s3, where URLs come from the bucket instead.
+      PUBLIC_BASE_URL: https://${DOMAIN:-reportajgo.uz}/agent
       # ── Publishing config (see the identical block on backend-worker) ──
       # Non-secret operational settings, version-controlled here so they ship with
       # the stack instead of being hand-synced into backend.env on the server.
@@ -77,6 +85,12 @@ services:
       BRAND_TELEGRAM_URL: https://t.me/reportajgo
       BRAND_INSTAGRAM_URL: https://www.instagram.com/reportajgo
       BRAND_YOUTUBE_URL: https://www.youtube.com/@ReportajGo
+    # Generated media is SHARED, not per-container: the worker (and the bot's
+    # instant-post path) write the images, this service is the one that serves
+    # them at /media. Each container used to have its own empty /app/media, so
+    # every locally-stored cover 404'd for the website and vanished on redeploy.
+    volumes:
+      - media_data:/app/media
     command: sh -c "npx prisma migrate deploy && npm run start:app"
     healthcheck:
       test:
@@ -107,6 +121,9 @@ services:
       DATABASE_URL: postgresql://reportajgo:${BACKEND_POSTGRES_PASSWORD}@backend-postgres:5432/reportajgo_backend?schema=public
       REDIS_URL: redis://redis:6379
       WEBSITE_API_URL: http://frontend:3000
+      # Must match backend-app: this is the origin baked into the URL of every
+      # image this worker generates and stores locally.
+      PUBLIC_BASE_URL: https://${DOMAIN:-reportajgo.uz}/agent
       # ── Publishing config (see the identical block on backend-app) ──
       # Non-secret operational settings, version-controlled here so they ship with
       # the stack instead of being hand-synced into backend.env on the server.
@@ -135,9 +152,12 @@ services:
     #  - ./.instagram-profile: the logged-in Chromium profile the Instagram "web"
     #    publisher reuses. Create it once with `npm run instagram:login`, then copy
     #    the folder here. RW so Instagram can refresh its session.
+    #  - media_data: the shared generated-media volume (see backend-app). This
+    #    container writes the images; backend-app serves them.
     volumes:
       - ./.secrets:/app/.secrets
       - ./.instagram-profile:/app/.instagram-profile
+      - media_data:/app/media
     # Start a virtual display (24-bit) for the headed Instagram Chromium, then run
     # the worker. Xvfb -ac disables X access control so no xauth is needed, and it's
     # best-effort (backgrounded) — if the display can't start, the worker still runs
@@ -161,6 +181,11 @@ services:
       DATABASE_URL: postgresql://reportajgo:${BACKEND_POSTGRES_PASSWORD}@backend-postgres:5432/reportajgo_backend?schema=public
       REDIS_URL: redis://redis:6379
       WEBSITE_API_URL: http://frontend:3000
+      # The bot generates media too (instant-post from a pasted link), so it
+      # mints media URLs and needs the same public origin + shared volume.
+      PUBLIC_BASE_URL: https://${DOMAIN:-reportajgo.uz}/agent
+    volumes:
+      - media_data:/app/media
     command: npm run start:bot
     depends_on:
       backend-app:
@@ -178,6 +203,12 @@ services:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       DATABASE_URL: postgresql://reportajgo:${FRONTEND_POSTGRES_PASSWORD}@frontend-postgres:5432/reportajgo_frontend?schema=public
+    # Article covers and admin uploads under UPLOAD_STORAGE_DRIVER=local land in
+    # public/uploads. Without a volume they live only inside the container, so
+    # every redeploy recreated it and left all existing articles with broken
+    # covers. Not needed by the s3 driver, but harmless there.
+    volumes:
+      - frontend_uploads:/app/public/uploads
     command: sh -c "npx prisma migrate deploy && npm run admin:ensure && npm run slug:backfill && npm run start"
     depends_on:
       frontend-postgres:
@@ -204,5 +235,10 @@ volumes:
   backend_pgdata:
   frontend_pgdata:
   redisdata:
+  # Generated media, shared by the three backend containers (worker/bot write,
+  # app serves) and persistent across redeploys.
+  media_data:
+  # Re-hosted article covers + admin uploads (public/uploads).
+  frontend_uploads:
   caddy_data:
   caddy_config:

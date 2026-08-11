@@ -63,6 +63,31 @@ It uploads the Higgsfield token + Instagram session into `.secrets/`, sets the
 matching `backend.env` values (reusing the frontend's S3 bucket + agent key),
 recreates the affected containers, and verifies the result. Safe to re-run.
 
+## Article covers (generated media)
+
+Generated images live on the `media_data` volume, shared by `backend-app`,
+`backend-worker` and `telegram-bot`: the worker and the bot write them, and
+`backend-app` serves them at `/media`, which Caddy publishes as
+`https://<DOMAIN>/agent/media/<file>`. `PUBLIC_BASE_URL` is set to
+`https://<DOMAIN>/agent` in the compose file so every minted media URL is that
+public address.
+
+That matters because the site does not link the agent's image — it **fetches**
+it and re-hosts it under `/uploads`. A URL only the agent's own container can
+reach (`http://localhost:3010/media/…`, the old default) cannot be fetched or
+displayed, which is what left articles with broken covers. Re-hosted uploads
+live on the `frontend_uploads` volume so a redeploy no longer wipes them.
+
+To repair articles that were ingested with an unusable cover:
+
+```bash
+docker compose exec frontend node scripts/rehost-images.mjs   # DRY_RUN=1 to preview
+```
+
+It re-points each broken cover at the public agent origin and re-hosts it; when
+the image is genuinely gone the cover is cleared, so the article falls back to
+the branded gradient tile instead of a broken image.
+
 ## Smoke Checks
 
 ```bash
