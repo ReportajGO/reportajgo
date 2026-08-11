@@ -1,6 +1,7 @@
 import { logger } from "../../config/logger.js";
 import { tryWithLock } from "../../queue/lock.js";
 import { generateMediaForPendingDrafts } from "./mediaService.js";
+import { recoverStalledMedia } from "./mediaRecovery.js";
 
 const log = logger.child({ module: "media-sweep" });
 
@@ -27,9 +28,14 @@ export async function sweepPendingMedia(): Promise<{
   failed: number;
   skipped?: boolean;
 }> {
-  const outcome = await tryWithLock(MEDIA_LOCK_KEY, MEDIA_LOCK_TTL_MS, () =>
-    generateMediaForPendingDrafts(),
-  );
+  const outcome = await tryWithLock(MEDIA_LOCK_KEY, MEDIA_LOCK_TTL_MS, async () => {
+    // Repair first, generate second: assets abandoned by a restarted worker and
+    // drafts stranded in FAILED are put back in the queue here, so a provider
+    // outage heals itself once the provider recovers instead of waiting for
+    // someone to notice and run a script. Bounded — see mediaRecovery.
+    await recoverStalledMedia();
+    return generateMediaForPendingDrafts();
+  });
   if (!outcome.ran) {
     log.debug("media sweep skipped — another sweep holds the lock");
     return { ready: 0, failed: 0, skipped: true };

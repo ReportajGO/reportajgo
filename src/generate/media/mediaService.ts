@@ -286,6 +286,7 @@ async function generateForDraft(
     return "ready";
   }
 
+  const startedAt = new Date();
   try {
     const scene = await describeScene(draft.newsItem);
 
@@ -324,8 +325,43 @@ async function generateForDraft(
     return "ready";
   } catch (err) {
     log.error({ err, draftId: draft.id }, "media generation failed for draft");
+    await recordAttempt(draft.id, ratio, startedAt, err);
     await prisma.postDraft.update({ where: { id: draft.id }, data: { status: "FAILED" } });
     return "failed";
+  }
+}
+
+/**
+ * Guarantee every run leaves exactly one asset row behind. persistAsset already
+ * records what the provider did, but a draft that died BEFORE the first
+ * provider call (a failed scene description, a thrown lookup) left nothing at
+ * all: the review card had no reason to show, and auto-recovery had no attempt
+ * to count — so it would have retried that draft forever.
+ */
+async function recordAttempt(
+  draftId: string,
+  aspectRatio: AspectRatio,
+  since: Date,
+  err: unknown,
+): Promise<void> {
+  try {
+    const recorded = await prisma.mediaAsset.count({
+      where: { draftId, createdAt: { gte: since } },
+    });
+    if (recorded > 0) return;
+    await prisma.mediaAsset.create({
+      data: {
+        draftId,
+        type: "IMAGE",
+        provider: "none",
+        aspectRatio,
+        prompt: "(failed before generation started)",
+        status: "FAILED",
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
+  } catch (writeErr) {
+    log.warn({ err: writeErr, draftId }, "could not record the failed attempt");
   }
 }
 

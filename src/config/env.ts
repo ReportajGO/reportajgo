@@ -40,6 +40,24 @@ const schema = z.object({
   // fail over to the other on a 429/503 — doubling free-tier throughput.
   GEMINI_API_KEY_2: z.string().optional(),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  // Deadline for a single Gemini request. Media generation processes drafts one
+  // at a time, so a call that never answers stalls every image behind it —
+  // silently, since nothing errors and nothing logs. 90s is far above a normal
+  // response (a few seconds) and well below "the queue is stuck".
+  GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+
+  // ─── Media self-healing (see generate/media/mediaRecovery.ts) ───────────────
+  // Automatically release assets abandoned mid-generation (every deploy kills
+  // the worker) and requeue drafts stranded in FAILED once the provider is
+  // healthy again, instead of needing `npm run media:retry -- --apply` by hand.
+  MEDIA_AUTO_RETRY_ENABLED: z
+    .string()
+    .default("true")
+    .transform((v) => v !== "false"),
+  // Total generation runs per draft, counted by its MediaAsset rows. Bounds what
+  // a systemic outage can cost in provider credits: past this the draft stays
+  // FAILED and waits for a human, which is the signal something is really wrong.
+  MEDIA_AUTO_RETRY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
 
   // Image generation provider:
   //  - "higgsfield-mcp": Higgsfield via MCP (OAuth, uses the subscription/app

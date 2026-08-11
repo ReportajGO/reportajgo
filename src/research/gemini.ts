@@ -26,6 +26,13 @@ const BASE_DELAY_MS = 1500;
 const MAX_DELAY_MS = 30_000;
 // Transient statuses worth retrying (overload / rate limit / gateway).
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+// How many timed-out attempts to tolerate before surfacing the failure. A
+// request that never answers is worse than one that fails: media generation
+// works through drafts one at a time, so a single hung call stalls every image
+// behind it — silently, because nothing errored and nothing logged. Cap the
+// attempt, then cap the re-tries so an unresponsive endpoint surfaces in
+// minutes instead of blocking the queue indefinitely.
+const MAX_TIMEOUT_RETRIES = 2;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -37,18 +44,34 @@ function statusOf(err: unknown): number | undefined {
   return undefined;
 }
 
+/** Did this attempt die on our own deadline rather than a server response? */
+export function isTimeoutError(err: unknown): boolean {
+  const name = typeof err === "object" && err !== null ? (err as { name?: unknown }).name : undefined;
+  if (name === "AbortError" || name === "TimeoutError") return true;
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return message.includes("aborted") || message.includes("timed out") || message.includes("timeout");
+}
+
 /**
  * Run any Gemini call with exponential backoff on transient errors
  * (429/5xx / "high demand" 503). Reused by both text and image generation.
  */
 export async function withGeminiRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastErr: unknown;
+  let timeouts = 0;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await fn();
     } catch (err) {
       lastErr = err;
       const status = statusOf(err);
+      if (status === undefined && isTimeoutError(err)) {
+        timeouts++;
+        if (timeouts > MAX_TIMEOUT_RETRIES) {
+          log.error({ timeouts, timeoutMs: env.GEMINI_TIMEOUT_MS }, "gemini kept timing out; giving up");
+          throw err;
+        }
+      }
       if (attempt === MAX_RETRIES || (status !== undefined && !RETRYABLE.has(status))) {
         throw err;
       }
@@ -67,7 +90,14 @@ export async function withGeminiRetry<T>(fn: () => Promise<T>): Promise<T> {
 async function callModel(
   params: Parameters<GoogleGenAI["models"]["generateContent"]>[0],
 ): ReturnType<GoogleGenAI["models"]["generateContent"]> {
-  return withGeminiRetry(() => nextClient().models.generateContent(params));
+  // A fresh deadline per attempt — the signal is consumed once, so it has to be
+  // built inside the retry callback rather than shared across retries.
+  return withGeminiRetry(() =>
+    nextClient().models.generateContent({
+      ...params,
+      config: { ...params.config, abortSignal: AbortSignal.timeout(env.GEMINI_TIMEOUT_MS) },
+    }),
+  );
 }
 
 export interface GroundedResult<T> {
