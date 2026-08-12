@@ -7,17 +7,36 @@ vi.mock("../../../research/gemini.js", () => ({ generateText: vi.fn() }));
 
 const { composePrompt } = await import("../prompts.js");
 
-// Soul renders whatever visual furniture the prompt names. Asking for a caption
-// bar got us a caption bar — filled with garbled pseudo-text. Every word on a
-// ReportageGO post is composited by our own card template, so the generated
-// asset must be a bare photograph.
+// An image model renders whatever visual furniture the prompt NAMES, whether or
+// not the word "no" precedes it: a prompt listing captions, chyrons, tickers and
+// watermarks describes an image full of them, which is how posts ended up with
+// colour-coded caption bars of garbled pseudo-text. So the rule is not "ban it
+// louder" — it is "never say the word". Every prompt describes blank surfaces
+// instead, and every ReportageGO word is composited by our own card template.
+const FURNITURE = [
+  "caption",
+  "chyron",
+  "lower third",
+  "lower-third",
+  "ticker",
+  "subtitle",
+  "watermark",
+  "title card",
+  "typography",
+  "logo",
+  "newspaper",
+  "poster",
+  "banner",
+  "whiteboard",
+];
+
 describe("image prompt composition", () => {
   const scene = "A wide shot of an empty modern laboratory at dawn.";
 
-  it("forbids rendered text in the image prompt", () => {
+  it("states the no-writing rule in the image prompt", () => {
     const prompt = composePrompt(scene, "IMAGE");
     expect(prompt).toContain(BRAND_STYLE.pureImage);
-    expect(prompt.toLowerCase()).toContain("no text");
+    expect(prompt.toLowerCase()).toContain("printed, written or drawn on");
   });
 
   it("forbids rendered text in the video prompt too", () => {
@@ -31,21 +50,26 @@ describe("image prompt composition", () => {
     expect(prompt).toContain(BRAND_STYLE.guardrails);
   });
 
-  it("never asks the model for a caption bar or broadcast graphics", () => {
-    const banned = ["caption bar", "lower-third bar", "chyron", "news ticker", "title card"];
+  it("never names broadcast furniture anywhere in the prompt", () => {
     for (const type of ["IMAGE", "VIDEO"] as const) {
-      const style = (type === "VIDEO" ? BRAND_STYLE.videoStyle : BRAND_STYLE.imageStyle).toLowerCase();
-      for (const phrase of banned) {
-        expect(style, `${type} style must not request "${phrase}"`).not.toContain(phrase);
+      // The whole prompt, not just the style block: naming the furniture is just
+      // as costly in the pure-image rule that was meant to forbid it.
+      const prompt = composePrompt(scene, type).toLowerCase();
+      for (const phrase of FURNITURE) {
+        expect(prompt, `${type} prompt must not name "${phrase}"`).not.toContain(phrase);
       }
     }
   });
 
-  it("escalates the no-text rule on each retry", () => {
+  it("escalates by describing the surfaces, not by repeating the ban", () => {
     expect(PURE_IMAGE_ESCALATION[0]).toBe("");
     expect(PURE_IMAGE_ESCALATION.length).toBeGreaterThan(1);
     for (const step of PURE_IMAGE_ESCALATION.slice(1)) {
-      expect(step.toLowerCase()).toMatch(/wordless|no text/);
+      const lower = step.toLowerCase();
+      expect(lower).toMatch(/blank|plain|bare|matte|switched off/);
+      for (const phrase of FURNITURE) {
+        expect(lower, `escalation must not name "${phrase}"`).not.toContain(phrase);
+      }
     }
   });
 });

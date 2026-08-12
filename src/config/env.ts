@@ -103,17 +103,24 @@ const schema = z.object({
   // Aspect ratio for the branded card background generation.
   BRAND_CARD_RATIO: z.enum(["4:5", "1:1", "9:16", "16:9"]).default("4:5"),
 
-  // Higgsfield image model. "soul_2" is Soul 2.0 — the editorial/realistic look
-  // we want, 0.12 credits per 2k image. It does drift toward hallucinated signage,
-  // which the wordless-retry loop in mediaService catches and regenerates.
-  HIGGSFIELD_IMAGE_MODEL: z.string().default("soul_2"),
+  // Higgsfield image model. News covers are scenes — skylines, infrastructure,
+  // factory floors — not portraits. soul_2 is the character/UGC model: it renders
+  // people well but drifts badly on scenes, inventing caption bars, sticker
+  // badges and signage full of garbled pseudo-text. nano_banana_pro is
+  // general-purpose, follows the blank-surfaces instruction, and supports every
+  // ratio we ask for (including 4:5) without the soul_2 fallback in modelRatio.
+  HIGGSFIELD_IMAGE_MODEL: z.string().default("nano_banana_pro"),
   // Higgsfield V2 SDK uses "KEY_ID:KEY_SECRET" credentials from cloud.higgsfield.ai.
   HIGGSFIELD_CREDENTIALS: z.string().optional(),
   // ElevenLabs, for the news presenter's cloned voice. The clone is private to
   // your ElevenLabs account, so it is only reachable with your own key —
   // Higgsfield's built-in ElevenLabs engine cannot see it.
   ELEVENLABS_API_KEY: z.string().optional(),
-  ELEVENLABS_VOICE_ID: z.string().optional(),
+  // The presenter's voice clone. A voice id is an account-scoped handle, not a
+  // secret (the key above is what grants access), so it defaults here rather
+  // than having to be repeated in every .env — otherwise a deployment that set
+  // the key but not the id gets a video with no voice at all.
+  ELEVENLABS_VOICE_ID: z.string().default("xr8iiOGfCd6vvCgIh6EV"),
   // eleven_v3 is the model with Uzbek coverage; the v2/turbo families are
   // limited to ~30 languages and do not include it.
   ELEVENLABS_MODEL_ID: z.string().default("eleven_v3"),

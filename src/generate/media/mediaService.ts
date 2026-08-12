@@ -58,6 +58,10 @@ async function wordlessBackground(
   prompt: string,
   ratio: AspectRatio,
 ): Promise<{ bytes: Buffer; mime: string; provider: string } | null> {
+  // A real news photo the detector rejected is still a real photograph: its text
+  // is a genuine street sign or shopfront, legible and correctly spelled. Keep it
+  // as the fallback — it beats a generated frame covered in invented scribble.
+  let sourcePhoto: { bytes: Buffer; mime: string; provider: string } | null = null;
   if (sourceUrl) {
     const found = await findArticleImageUrl(sourceUrl);
     if (found) {
@@ -66,7 +70,10 @@ async function wordlessBackground(
         log.info({ from: found }, "using source news photo (no text)");
         return { bytes: img.bytes, mime: img.mime, provider: "source" };
       }
-      if (img) log.info({ from: found }, "source photo has text; generating a clean image instead");
+      if (img) {
+        log.info({ from: found }, "source photo has text; generating a clean image instead");
+        sourcePhoto = { bytes: img.bytes, mime: img.mime, provider: "source" };
+      }
     }
   }
 
@@ -83,19 +90,30 @@ async function wordlessBackground(
     const photo = { ...fetched, provider: img.provider };
     if (!(await hasText(photo.bytes, photo.mime))) return photo;
     log.warn({ attempt: attempt + 1 }, "generated image still had words; regenerating");
-    candidate ??= photo;
+    // Keep the LATEST rejected attempt, not the first. Each retry describes the
+    // blank surfaces more concretely, so the later frames carry the least junk —
+    // `??=` pinned the very first, least-constrained attempt, which is precisely
+    // the one most likely to have invented a caption bar.
+    candidate = photo;
   }
 
   // Every attempt tripped the text detector. It is a useful filter but not a
   // reliable judge — it flags an ordinary street sign in a documentary photo —
   // so treating its verdict as fatal meant most stories were published with no
-  // picture at all. Keep the first candidate and say so in the log; the prompt
-  // itself already forbids captions, watermarks and broadcast graphics, and the
-  // headline is composited by our own card template afterwards.
+  // picture at all. Rank what is left by how the text got there: real writing in
+  // a real photo reads as journalism, invented writing reads as broken.
+  if (sourcePhoto) {
+    log.warn(
+      { attempts: WORDLESS_ATTEMPTS },
+      "no wordless generation; falling back to the real source photo (its text is genuine, not hallucinated)",
+    );
+    return sourcePhoto;
+  }
+
   if (candidate) {
     log.warn(
       { attempts: WORDLESS_ATTEMPTS, provider: candidate.provider },
-      "no provably wordless image; using the best candidate rather than failing the draft",
+      "no provably wordless image; publishing the most-constrained attempt rather than failing the draft",
     );
     return candidate;
   }
