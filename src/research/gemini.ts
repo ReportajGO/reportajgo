@@ -156,7 +156,12 @@ export async function generateJson<T>(prompt: string, temperature = 0.2): Promis
  * text … signage") made the model answer YES to nearly every usable news photo,
  * so ~85% of drafts were regenerated three times and then failed outright.
  *
- * Returns false on any error (fail-open).
+ * It also rejects a frame that is a photograph of the picture rather than of
+ * the scene — a book spread, a print in a mount, a display in a room — which
+ * carries no lettering at all and so passed every check above.
+ *
+ * Throws if the model call fails; the caller decides what an unverifiable
+ * image is worth (mediaService treats it as unusable).
  */
 export async function imageHasText(base64Data: string, mimeType: string): Promise<boolean> {
   const prompt = [
@@ -165,7 +170,13 @@ export async function imageHasText(base64Data: string, mimeType: string): Promis
     "- a caption bar, lower third, chyron, news ticker, subtitle, title card or watermark is drawn over the photo;",
     "- it carries a logo or a wordmark;",
     "- large lettering is a main subject of the frame (a headline, a poster or a banner filling much of it);",
-    "- any visible lettering is garbled, misspelled or nonsensical.",
+    "- any visible lettering is garbled, misspelled or nonsensical;",
+    // Added after a generation passed every lettering check while being a
+    // photograph OF AN OBJECT: the scene printed across an open book, gutter
+    // and page edges in shot. No text on it, and still not a news picture.
+    "- the photo is presented as an object instead of being the scene itself —",
+    "  printed on a page or across an open book, hung as a print in a mount or",
+    "  border, shown on a display standing in a room, or laid out as a spread.",
     "Answer NO if the only text is small, incidental and naturally part of the scene —",
     "a distant street sign, a label on equipment, a shopfront in the background.",
     "That is normal in a real photograph and is not a defect.",

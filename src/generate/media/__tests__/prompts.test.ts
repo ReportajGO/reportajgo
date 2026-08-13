@@ -28,15 +28,28 @@ const FURNITURE = [
   "poster",
   "banner",
   "whiteboard",
+  // Added after each of these was measured producing the artefact it named:
+  // "graphic design" → the photo rendered as a magazine spread with fake
+  // columns of fine print; "screen" → the photo rendered as a giant display
+  // standing against a gallery wall; "unbranded" → invented wordmarks on the
+  // equipment; "editorial" → printed-page framing. A negated mention drew them
+  // just as reliably as a positive one.
+  "graphic design",
+  "screen",
+  "unbranded",
+  "unmarked",
+  "editorial",
+  "magazine",
 ];
 
 describe("image prompt composition", () => {
   const scene = "A wide shot of an empty modern laboratory at dawn.";
 
-  it("states the no-writing rule in the image prompt", () => {
+  it("carries the pure-image rule as a description of material, not a ban", () => {
     const prompt = composePrompt(scene, "IMAGE");
     expect(prompt).toContain(BRAND_STYLE.pureImage);
-    expect(prompt.toLowerCase()).toContain("printed, written or drawn on");
+    // What the surfaces ARE, so there is nothing for the model to write on.
+    expect(prompt.toLowerCase()).toContain("bare material");
   });
 
   it("forbids rendered text in the video prompt too", () => {

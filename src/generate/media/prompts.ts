@@ -27,8 +27,21 @@ export async function describeScene(news: NewsForVisual): Promise<string> {
     "  For a story about money, deals or paperwork, photograph the PLACE or the",
     "  PHYSICAL OBJECTS instead: a trading floor, a port, a workshop, a skyline,",
     "  machinery, hands handling goods or tools.",
-    "- Nothing else in frame carries writing either: unbranded packaging, blank walls,",
-    "  switched-off screens. Choose subjects with plain, unmarked surfaces.",
+    "- CHOOSE A PLACE THAT HAS NOTHING TO WRITE ON. Open landscape, sky and weather,",
+    "  water, farmland, a distant skyline, a construction frame, or a close view of",
+    "  hands, tools, materials, machinery detail or plant life. These are the scenes",
+    "  an image model renders cleanly.",
+    "- AVOID INTERIORS OF LABS, OFFICES, CLASSROOMS, SHOPS, WAREHOUSES AND CONFERENCE",
+    "  ROOMS. Those rooms are lined with labels, posters, screens and equipment badges;",
+    "  the model invents every one of them as garbled lettering. Go outside, or move",
+    "  close enough that only material and texture fill the frame.",
+    // The scene text is pasted straight into the image prompt, so it falls under the
+    // same rule as the brand style: a negation still NAMES the thing. "Unbranded
+    // glassware" is a request for branding — it is how a lab bench came back
+    // carrying an invented logo and a wall of fake fine print.
+    "- Describe only what IS there. Never write 'unbranded', 'blank', 'no text', 'no",
+    "  logos' or any other negation — naming a thing in order to forbid it is still",
+    "  naming it, and the image model draws what it reads.",
     "",
     `Title: ${news.title}`,
     `Summary: ${news.summary}`,

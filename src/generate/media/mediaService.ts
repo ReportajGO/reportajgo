@@ -58,10 +58,10 @@ async function wordlessBackground(
   prompt: string,
   ratio: AspectRatio,
 ): Promise<{ bytes: Buffer; mime: string; provider: string } | null> {
-  // A real news photo the detector rejected is still a real photograph: its text
-  // is a genuine street sign or shopfront, legible and correctly spelled. Keep it
-  // as the fallback — it beats a generated frame covered in invented scribble.
-  let sourcePhoto: { bytes: Buffer; mime: string; provider: string } | null = null;
+  // Best outcome by far: the real photograph that ran with the real story. Only
+  // a clean one — a rejected source photo is rejected for carrying someone
+  // else's watermark, wordmark or headline, which is exactly the furniture that
+  // must never appear under our card.
   if (sourceUrl) {
     const found = await findArticleImageUrl(sourceUrl);
     if (found) {
@@ -70,16 +70,12 @@ async function wordlessBackground(
         log.info({ from: found }, "using source news photo (no text)");
         return { bytes: img.bytes, mime: img.mime, provider: "source" };
       }
-      if (img) {
-        log.info({ from: found }, "source photo has text; generating a clean image instead");
-        sourcePhoto = { bytes: img.bytes, mime: img.mime, provider: "source" };
-      }
+      if (img) log.info({ from: found }, "source photo carries text; generating a clean image instead");
     }
   }
 
-  // Each retry restates the no-text rule more forcefully and uses a fresh seed,
-  // so we aren't just re-rolling the same prompt and hoping.
-  let candidate: { bytes: Buffer; mime: string; provider: string } | null = null;
+  // Each retry describes the blank surfaces more concretely and uses a fresh
+  // seed, so we aren't just re-rolling the same prompt and hoping.
   for (let attempt = 0; attempt < WORDLESS_ATTEMPTS; attempt++) {
     const escalation = PURE_IMAGE_ESCALATION[Math.min(attempt, PURE_IMAGE_ESCALATION.length - 1)]!;
     const img = await generatePure(provider, `${prompt} ${escalation}`.trim(), ratio);
@@ -90,35 +86,18 @@ async function wordlessBackground(
     const photo = { ...fetched, provider: img.provider };
     if (!(await hasText(photo.bytes, photo.mime))) return photo;
     log.warn({ attempt: attempt + 1 }, "generated image still had words; regenerating");
-    // Keep the LATEST rejected attempt, not the first. Each retry describes the
-    // blank surfaces more concretely, so the later frames carry the least junk —
-    // `??=` pinned the very first, least-constrained attempt, which is precisely
-    // the one most likely to have invented a caption bar.
-    candidate = photo;
   }
 
-  // Every attempt tripped the text detector. It is a useful filter but not a
-  // reliable judge — it flags an ordinary street sign in a documentary photo —
-  // so treating its verdict as fatal meant most stories were published with no
-  // picture at all. Rank what is left by how the text got there: real writing in
-  // a real photo reads as journalism, invented writing reads as broken.
-  if (sourcePhoto) {
-    log.warn(
-      { attempts: WORDLESS_ATTEMPTS },
-      "no wordless generation; falling back to the real source photo (its text is genuine, not hallucinated)",
-    );
-    return sourcePhoto;
-  }
-
-  if (candidate) {
-    log.warn(
-      { attempts: WORDLESS_ATTEMPTS, provider: candidate.provider },
-      "no provably wordless image; publishing the most-constrained attempt rather than failing the draft",
-    );
-    return candidate;
-  }
-
-  log.error({ attempts: WORDLESS_ATTEMPTS }, "image generation produced nothing usable; giving up");
+  // Nothing came back clean. This used to publish the least-bad attempt rather
+  // than leave a post bare, and that is precisely how frames of invented
+  // caption bars and pseudo-text reached readers: the pipeline had already
+  // detected the junk and shipped it anyway. A missing picture is a gap we can
+  // fill later; a published frame of garbled writing is what the audience sees
+  // and what the brand is judged on. Refuse, and let the caller decide.
+  log.error(
+    { attempts: WORDLESS_ATTEMPTS },
+    "no wordless image after every attempt; refusing to publish one with invented text",
+  );
   return null;
 }
 
@@ -139,7 +118,10 @@ export async function generateWebsiteImage(
 
 const IMAGE_GEN_ATTEMPTS = 3;
 // How many times to regenerate an image while words are still detected on it.
-const WORDLESS_ATTEMPTS = 3;
+// A rejected image is now dropped rather than published, so the whole cost of
+// giving up early is a post with no picture — worth more attempts, and the
+// escalation ladder has a distinct, progressively tighter shot for each one.
+const WORDLESS_ATTEMPTS = 5;
 
 /** A fresh seed per attempt, so a retry actually re-rolls the composition. */
 const randomSeed = () => Math.floor(Math.random() * 1_000_000_000);
@@ -159,12 +141,18 @@ async function generatePure(
   return img;
 }
 
-/** Text-detection on raw bytes; never throws (fail-open = treat as no text). */
+/**
+ * Text-detection on raw bytes; never throws. Fails CLOSED: an image we could
+ * not check is treated as if it carries text. The two errors are not
+ * symmetrical — a wrong "clean" puts garbled pseudo-text in front of readers,
+ * a wrong "dirty" costs one more generation attempt.
+ */
 async function hasText(bytes: Buffer, mime: string): Promise<boolean> {
   try {
     return await imageHasText(bytes.toString("base64"), mime);
-  } catch {
-    return false;
+  } catch (err) {
+    log.warn({ err }, "text detection failed; treating the image as unusable");
+    return true;
   }
 }
 

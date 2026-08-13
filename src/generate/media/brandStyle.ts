@@ -46,18 +46,32 @@ export interface BrandStyle {
 export const PURE_IMAGE_ESCALATION: readonly string[] = [
   "",
   "Every surface in the frame is smooth, plain and completely blank.",
-  "Shoot the scene so nothing printable is in view: bare walls and matte panels, " +
-    "plain unmarked packaging, dark switched-off screens, and any distant surface " +
-    "far enough out of focus to read as texture alone.",
+  "Hold the frame on bare walls, matte panels and open floor, with every distant " +
+    "surface far enough out of focus to read as texture alone.",
+  // The last two steps stop describing the surfaces and change the shot itself.
+  // By here the model has ignored the rule three times, so the fix is to frame
+  // something that physically cannot carry writing rather than ask again.
+  "Frame in close on material and texture alone — skin, fabric, foliage, metal, " +
+    "stone, water — with the background thrown into a plain wash of shallow " +
+    "depth of field.",
+  "Shoot outdoors in open natural surroundings — sky, land, water, foliage, " +
+    "weather — where every plane in view is bare ground or plain daylight and " +
+    "nothing manufactured stands close enough to be legible.",
 ];
 
 export const BRAND_STYLE: BrandStyle = {
   brandName: "ReportageGO",
 
   imageStyle: [
-    "Editorial news photograph.",
-    "Clean composition, realistic documentary photography,",
-    "neutral balanced lighting, high detail, 4k, sharp focus.",
+    // Not "editorial": that word describes a MAGAZINE, and the model obliged
+    // with printed spreads — a photo mounted on a folded page, fake columns of
+    // fine print down the side. Name the camera, not the publication.
+    "Documentary photograph taken on a 35mm camera with a fast prime lens.",
+    "Natural available light, true colour, high detail, sharp focus.",
+    // The scene must BE the picture. Left unsaid, the model kept photographing
+    // the picture as an object inside another room — a giant display standing
+    // against a gallery wall, a print in a mount.
+    "The scene itself fills the frame corner to corner, nothing around it.",
     // "Keep the lower third uncluttered" used to live here. Naming the lower
     // third is how you get a lower third: the model read it as a region of the
     // layout to fill and drew a caption bar across it. Describe the bottom of
@@ -78,11 +92,15 @@ export const BRAND_STYLE: BrandStyle = {
     "a photograph of the actual event.",
   ].join(" "),
 
+  // Every noun here was measured. The previous version read "no graphic design
+  // applied over it… screens that are switched off… plain and unbranded", and
+  // the model rendered a magazine spread, a giant display in a gallery, and
+  // invented wordmarks — one artefact per noun, in the very sentence meant to
+  // prevent them. A negation is still a mention, and a mention is an
+  // instruction. So this says only what the frame IS made of: material.
   pureImage: [
-    "A single straight photograph, exactly as it came out of the camera,",
-    "with no graphic design applied over it.",
-    "The location is plain and unbranded: bare walls, matte panels,",
-    "smooth blank packaging, and screens that are switched off and dark.",
-    "Nothing in the frame is printed, written or drawn on.",
+    "A single straight photograph, exactly as it came out of the camera.",
+    "Every surface in view is bare material — stone, metal, glass, fabric,",
+    "foliage, skin, soil, water, concrete — smooth, clean and evenly lit.",
   ].join(" "),
 };
