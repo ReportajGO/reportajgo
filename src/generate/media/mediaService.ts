@@ -76,10 +76,16 @@ async function wordlessBackground(
 
   // Each retry describes the blank surfaces more concretely and uses a fresh
   // seed, so we aren't just re-rolling the same prompt and hoping.
+  let generated = 0;
+  let lastError: string | undefined;
   for (let attempt = 0; attempt < WORDLESS_ATTEMPTS; attempt++) {
     const escalation = PURE_IMAGE_ESCALATION[Math.min(attempt, PURE_IMAGE_ESCALATION.length - 1)]!;
     const img = await generatePure(provider, `${prompt} ${escalation}`.trim(), ratio);
-    if (img.status !== "READY" || !img.url) continue;
+    if (img.status !== "READY" || !img.url) {
+      lastError = img.error;
+      continue;
+    }
+    generated++;
     // Fetch once and check those same bytes — the old path downloaded the image
     // twice, once to inspect and once to keep.
     const fetched = await fetchImage(img.url);
@@ -88,15 +94,25 @@ async function wordlessBackground(
     log.warn({ attempt: attempt + 1 }, "generated image still had words; regenerating");
   }
 
-  // Nothing came back clean. This used to publish the least-bad attempt rather
-  // than leave a post bare, and that is precisely how frames of invented
-  // caption bars and pseudo-text reached readers: the pipeline had already
-  // detected the junk and shipped it anyway. A missing picture is a gap we can
-  // fill later; a published frame of garbled writing is what the audience sees
-  // and what the brand is judged on. Refuse, and let the caller decide.
+  // Nothing usable. Say WHICH of the two failures happened: the provider never
+  // returning a picture (an expired session, a network fault, no credit) and
+  // the model returning junk every time need opposite fixes, and a single
+  // message covering both sent the last investigation down the wrong path.
+  if (generated === 0) {
+    log.error(
+      { attempts: WORDLESS_ATTEMPTS, err: lastError },
+      "image generation never returned a picture; nothing was checked — this is a provider fault, not a prompt one",
+    );
+    return null;
+  }
+
+  // Publishing the least-bad attempt is how frames of invented caption bars and
+  // pseudo-text reached readers: the pipeline had already detected the junk and
+  // shipped it anyway. A missing picture is a gap we can fill later; a
+  // published frame of garbled writing is what the audience sees.
   log.error(
-    { attempts: WORDLESS_ATTEMPTS },
-    "no wordless image after every attempt; refusing to publish one with invented text",
+    { attempts: WORDLESS_ATTEMPTS, generated },
+    "every generated image carried invented text; refusing to publish one",
   );
   return null;
 }
