@@ -12,6 +12,11 @@
  *     ever moved a draft out of FAILED, so an outage that lasted an hour left a
  *     pile of stories that would never get an image, however healthy the
  *     provider became afterwards.
+ *  3. A draft that reached PENDING_APPROVAL with no usable image. Media is
+ *     required only on some platforms; elsewhere a failed image still advances
+ *     the draft, which then sits in the review queue showing an empty frame.
+ *     Neither the sweep (PENDING_MEDIA only) nor case 2 (FAILED only) could
+ *     see it, so it stayed empty permanently.
  *
  * Recovery is deliberately BOUNDED: regenerating costs provider credits, so a
  * systemic outage must cost a fixed number of attempts rather than an unbounded
@@ -53,14 +58,35 @@ async function failStalledAssets(): Promise<number> {
   return count;
 }
 
-/** Move recoverable FAILED drafts back to PENDING_MEDIA, within budget. */
+/** Move recoverable drafts with no usable image back to PENDING_MEDIA, within budget. */
 async function requeueFailedDrafts(): Promise<number> {
   const candidates = await prisma.postDraft.findMany({
     where: {
-      status: "FAILED",
       // Publish failures live on ScheduledPost; only media failures are ours.
       scheduledPost: { is: null },
       updatedAt: { lt: new Date(Date.now() - RETRY_COOLDOWN_MS) },
+      OR: [
+        { status: "FAILED" },
+        // A draft only FAILS at the media step when its platform requires an
+        // image. Where media is optional the draft is advanced to review with
+        // the failure attached, so it reaches the queue showing an empty frame
+        // — and then nothing ever looks at it again: the media sweep reads only
+        // PENDING_MEDIA, and this recovery read only FAILED. An expired
+        // provider session left exactly those cards behind, and no amount of
+        // fixing the provider afterwards would have filled them.
+        ...(env.MEDIA_GENERATION_ENABLED
+          ? [
+              {
+                status: "PENDING_APPROVAL" as const,
+                // Something was attempted and none of it came back usable.
+                // Without both halves, every healthy draft waiting for a human
+                // would be dragged back through generation on every sweep.
+                media: { some: {} },
+                NOT: { media: { some: { status: "READY" as const, url: { not: null } } } },
+              },
+            ]
+          : []),
+      ],
     },
     select: { id: true, media: { select: { status: true, url: true } } },
     orderBy: { updatedAt: "asc" },
