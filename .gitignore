@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 .env.local
+# Timestamped copies made before editing .env — same secrets, same rules.
+.env.bak*
 backend.env
 frontend.env
 bot.env
