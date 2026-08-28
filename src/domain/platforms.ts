@@ -38,7 +38,12 @@ export const PLATFORM_PROFILES: Record<Platform, PlatformProfile> = {
     maxChars: 680,
     hashtagCount: 3,
     media: { type: "IMAGE", aspectRatio: "16:9" },
-    mediaRequired: false,
+    // Required, like Instagram. It used to be false so a Telegram post could go
+    // out as text when the image provider was down — but that "graceful"
+    // fallback is what hid a thirteen-day outage: Instagram drafts failed
+    // loudly and were recoverable, while Telegram and Website slipped past the
+    // media stage picture-less and got rejected by hand, one by one.
+    mediaRequired: true,
   },
   INSTAGRAM: {
     platform: "INSTAGRAM",
@@ -63,7 +68,9 @@ export const PLATFORM_PROFILES: Record<Platform, PlatformProfile> = {
       "attribution. Neutral, journalistic, well-structured. No emoji.",
     hashtagCount: 0,
     media: { type: "IMAGE", aspectRatio: "16:9" },
-    mediaRequired: false,
+    // An article published with no cover falls back to a branded gradient tile,
+    // which reads as a broken page rather than a design choice. See TELEGRAM.
+    mediaRequired: true,
   },
   YOUTUBE: {
     platform: "YOUTUBE",
