@@ -35,6 +35,22 @@ export async function describeScene(news: NewsForVisual): Promise<string> {
     "  ROOMS. Those rooms are lined with labels, posters, screens and equipment badges;",
     "  the model invents every one of them as garbled lettering. Go outside, or move",
     "  close enough that only material and texture fill the frame.",
+    // Everything above pushes the scene AWAY from offices, documents and screens,
+    // and with nothing left to hold onto the model reaches for metaphor. A story
+    // about Malaysia's patent system came back as "a complex, interlocking
+    // mechanism made of polished clear glass" — which the image model rendered as
+    // broken glass lying on a bare arm. Abstraction is where this prompt fails, so
+    // the scene has to be pinned to something real.
+    "- ANCHOR THE SCENE IN THE STORY. If the news names a country or city, show a",
+    "  real, recognisable place from it: its skyline, port, street, farmland,",
+    "  coastline or landmark architecture. If it names an industry, show that",
+    "  industry's actual physical work — the machinery, the site, the materials,",
+    "  the vehicles.",
+    "- NEVER INVENT A METAPHOR. No symbolic stand-in for an idea: no glass or",
+    "  crystal mechanisms, gears, cogs, chains, puzzle pieces, scales, light beams,",
+    "  networks of glowing lines or abstract 'interlocking' shapes. A viewer must be",
+    "  able to say plainly what the photograph is OF, and how it relates to the",
+    "  headline.",
     // The scene text is pasted straight into the image prompt, so it falls under the
     // same rule as the brand style: a negation still NAMES the thing. "Unbranded
     // glassware" is a request for branding — it is how a lab bench came back
